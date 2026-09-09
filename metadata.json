@@ -1,0 +1,8 @@
+{
+  "name": "StudyFlow",
+  "description": "AI-powered semester planning and workload management tool for college students.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

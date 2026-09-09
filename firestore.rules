@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'mohamedelkoramy97@gmail.com' ||
+        request.auth.token.email == 'mohamedelkoramy2@gmail.com'
+      );
+    }
+
+    // User profiles and all user-owned data collections
+    match /users/{userId} {
+      allow read, write: if request.auth != null ? (request.auth.uid == userId || isAdmin()) : true;
+
+      match /{allSubcollections=**} {
+        allow read, write: if request.auth != null ? (request.auth.uid == userId || isAdmin()) : true;
+      }
+    }
+  }
+}
+

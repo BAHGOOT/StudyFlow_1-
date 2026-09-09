@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "fields": {
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "role": { "type": "string", "description": "User role (admin or student)" },
+        "coins": { "type": "number", "description": "Earned study coins" },
+        "unlockedSpecies": { "type": "array", "description": "List of unlocked tree species" },
+        "profile": { "type": "map", "description": "Student profile configuration" },
+        "availability": { "type": "map", "description": "Weekly study hours allocation" },
+        "commute": { "type": "map", "description": "Commute and travel settings" },
+        "todayPlan": { "type": "array", "description": "Daily scheduled study slots" },
+        "weeklyPlan": { "type": "array", "description": "Weekly generated study schedule" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last updated timestamp" }
+      }
+    },
+    "Course": {
+      "collection": "users/{userId}/courses",
+      "fields": {
+        "name": { "type": "string", "description": "Course title" },
+        "code": { "type": "string", "description": "Course code (e.g. CS201)" },
+        "color": { "type": "string", "description": "Badge color" },
+        "difficulty": { "type": "string", "description": "Difficulty rating" },
+        "credits": { "type": "number", "description": "Credit hours" },
+        "instructor": { "type": "string", "description": "Instructor name" },
+        "room": { "type": "string", "description": "Classroom or lecture hall" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      }
+    },
+    "Task": {
+      "collection": "users/{userId}/tasks",
+      "fields": {
+        "courseId": { "type": "string", "description": "Associated course ID" },
+        "name": { "type": "string", "description": "Task name" },
+        "type": { "type": "string", "description": "Task type" },
+        "dueDate": { "type": "string", "description": "Due date ISO string" },
+        "estimatedMinutes": { "type": "number", "description": "Estimated duration in minutes" },
+        "status": { "type": "string", "description": "Status" },
+        "priority": { "type": "string", "description": "Priority" },
+        "weightPercent": { "type": "number", "description": "Grading weight percentage" },
+        "notes": { "type": "string", "description": "Additional notes" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      }
+    },
+    "PlantedTree": {
+      "collection": "users/{userId}/plantedTrees",
+      "fields": {
+        "species": { "type": "string", "description": "Tree species identifier" },
+        "courseName": { "type": "string", "description": "Course name studied" },
+        "courseColor": { "type": "string", "description": "Course tag color" },
+        "durationMinutes": { "type": "number", "description": "Focus duration in minutes" },
+        "plantedAt": { "type": "string", "description": "Planting timestamp" },
+        "dayOfWeek": { "type": "string", "description": "Day of week short name" },
+        "month": { "type": "string", "description": "Month short name" },
+        "weekNumber": { "type": "number", "description": "Week number" },
+        "status": { "type": "string", "description": "Tree health status" }
+      }
+    },
+    "CollegeLecture": {
+      "collection": "users/{userId}/lectures",
+      "fields": {
+        "courseId": { "type": "string", "description": "Associated course ID" },
+        "courseName": { "type": "string", "description": "Course title" },
+        "day": { "type": "string", "description": "Day of week" },
+        "startTime": { "type": "string", "description": "Start time" },
+        "endTime": { "type": "string", "description": "End time" },
+        "room": { "type": "string", "description": "Lecture room" },
+        "type": { "type": "string", "description": "Lecture or Lab" }
+      }
+    }
+  }
+}

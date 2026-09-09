@@ -1,0 +1,317 @@
+import { useState, type FormEvent } from 'react';
+import { Course, Task, TaskType } from '../types';
+import { X, Sparkles, AlertCircle } from 'lucide-react';
+import { calculateSmartPriority } from '../utils/smartPlanner';
+
+interface AddTaskModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  courses: Course[];
+  onAddTask: (task: Task) => void;
+}
+
+const TASK_TYPES: TaskType[] = ['Assignment', 'Quiz', 'Exam', 'Project', 'Study', 'Other'];
+
+export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskModalProps) {
+  const [name, setName] = useState('');
+  const [courseId, setCourseId] = useState(courses[0]?.id || '');
+  const [type, setType] = useState<TaskType>('Assignment');
+  // Default deadline: tomorrow at 23:59
+  const [deadline, setDeadline] = useState('2026-09-09T23:59');
+  const [estimatedMinutes, setEstimatedMinutes] = useState(45);
+  const [importance, setImportance] = useState(4);
+  const [difficulty, setDifficulty] = useState(3);
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+
+  if (!isOpen) return null;
+
+  // Live calculation of smart score for student feedback
+  const calculated = calculateSmartPriority({
+    name,
+    courseId,
+    type,
+    deadline,
+    estimatedMinutes,
+    importance,
+    difficulty,
+  });
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError('Please enter a task name');
+      return;
+    }
+    if (!courseId) {
+      setError('Please select a course');
+      return;
+    }
+
+    const newTask: Task = {
+      id: `task-${Date.now()}`,
+      name: name.trim(),
+      courseId,
+      type,
+      deadline,
+      estimatedMinutes: Number(estimatedMinutes) || 45,
+      importance,
+      difficulty,
+      notes: notes.trim() || undefined,
+      status: 'todo',
+      smartPriorityScore: calculated.score,
+      urgencyReason: calculated.reason,
+    };
+
+    onAddTask(newTask);
+    onClose();
+    // Reset form
+    setName('');
+    setNotes('');
+    setError('');
+  };
+
+  return (
+    <div
+      id="add-task-modal-overlay"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+    >
+      <div
+        id="add-task-modal-container"
+        className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-150"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <div>
+            <h3 className="text-lg font-bold font-display text-slate-900">Add Academic Task</h3>
+            <p className="text-xs text-slate-500">
+              StudyFlow will automatically evaluate priority and fit it into your plan.
+            </p>
+          </div>
+          <button
+            id="close-add-task-modal"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 p-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Task Name */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+              Task Name *
+            </label>
+            <input
+              id="task-name-input"
+              type="text"
+              required
+              placeholder="e.g., Calculus Assignment 2 or Physics Problem Set"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (error) setError('');
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors"
+            />
+          </div>
+
+          {/* Course & Type Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+                Course *
+              </label>
+              <select
+                id="task-course-select"
+                value={courseId}
+                onChange={(e) => setCourseId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+              >
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name} ({course.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+                Task Type
+              </label>
+              <select
+                id="task-type-select"
+                value={type}
+                onChange={(e) => setType(e.target.value as TaskType)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+              >
+                {TASK_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Deadline & Estimated Time Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+                Deadline *
+              </label>
+              <input
+                id="task-deadline-input"
+                type="datetime-local"
+                required
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+              >
+              </input>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+                Estimated Time (minutes)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="task-duration-input"
+                  type="number"
+                  min="5"
+                  step="5"
+                  max="480"
+                  value={estimatedMinutes}
+                  onChange={(e) => setEstimatedMinutes(Math.max(5, parseInt(e.target.value) || 30))}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                />
+                <span className="text-xs text-slate-500 whitespace-nowrap">
+                  ({Math.round((estimatedMinutes / 60) * 10) / 10}h)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Importance & Difficulty Rating */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            {/* Importance */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Importance (1–5)
+                </label>
+                <span className="text-xs font-bold text-indigo-600">{importance}/5</span>
+              </div>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((lvl) => (
+                  <button
+                    type="button"
+                    key={`importance-${lvl}`}
+                    onClick={() => setImportance(lvl)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      importance >= lvl
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {lvl}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Grade impact & weight</p>
+            </div>
+
+            {/* Difficulty */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Difficulty (1–5)
+                </label>
+                <span className="text-xs font-bold text-amber-600">{difficulty}/5</span>
+              </div>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((lvl) => (
+                  <button
+                    type="button"
+                    key={`diff-${lvl}`}
+                    onClick={() => setDifficulty(lvl)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      difficulty >= lvl
+                        ? 'bg-amber-500 text-white border-amber-500'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {lvl}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Mental effort & complexity</p>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+              Notes (Optional)
+            </label>
+            <textarea
+              id="task-notes-input"
+              rows={2}
+              placeholder="e.g., Specific chapters, questions, test criteria..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+            />
+          </div>
+
+          {/* Dynamic Smart Priority Score Preview */}
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <div>
+                <span className="text-xs font-bold text-slate-800">Calculated Smart Priority:</span>
+                <p className="text-[11px] text-slate-500">{calculated.reason}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-lg font-mono font-bold text-indigo-600">
+                {calculated.score}
+              </span>
+              <span className="text-[10px] text-slate-400 uppercase font-semibold">/100</span>
+            </div>
+          </div>
+
+          {/* Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <button
+              id="cancel-add-task"
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl text-slate-600 hover:text-slate-800 hover:bg-slate-100 text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              id="submit-add-task"
+              type="submit"
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm shadow-sm hover:shadow transition-all active:scale-[0.98]"
+            >
+              Add Task
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
