@@ -11,6 +11,7 @@ import {
   TreeSpecies,
   CollegeLecture,
   CollegeCommute,
+  CourseMaterial,
 } from './types';
 import {
   INITIAL_COURSES,
@@ -22,12 +23,17 @@ import {
   INITIAL_PLANTED_TREES,
   INITIAL_COLLEGE_LECTURES,
   INITIAL_COLLEGE_COMMUTE,
+  INITIAL_MATERIALS,
 } from './data/initialData';
 import { DEFAULT_UNLOCKED_SPECIES } from './data/treeSpecies';
 import { Navigation } from './components/Navigation';
 import { Dashboard } from './components/Dashboard';
 import { MyTasks } from './components/MyTasks';
 import { Courses } from './components/Courses';
+import { Materials } from './components/Materials';
+import { MaterialsComingSoon } from './components/MaterialsComingSoon';
+import { SessionBlueprintDrawer } from './components/SessionBlueprintDrawer';
+import { UnfinishedTaskRolloverBanner } from './components/UnfinishedTaskRolloverBanner';
 import { Planner } from './components/Planner';
 import { Forest } from './components/Forest';
 import { Progress } from './components/Progress';
@@ -40,6 +46,8 @@ import { FloatingFocusWidget } from './components/FloatingFocusWidget';
 import { CollegeScheduleModal } from './components/CollegeScheduleModal';
 import { AssessmentCheckModal } from './components/AssessmentCheckModal';
 import { PlanPreviewModal } from './components/PlanPreviewModal';
+import { ScorePromptModal } from './components/ScorePromptModal';
+import { generateRemedialTasksForExam } from './utils/gradeCalculator';
 import { AuthScreen } from './components/AuthScreen';
 import { AuthProvider, useAuth, AuthUser } from './contexts/AuthContext';
 import { useFocusSession } from './hooks/useFocusSession';
@@ -55,6 +63,8 @@ import {
   clearAllUserData,
   populateSampleData,
   saveBatchScannedWorkspaceData,
+  saveMaterialToDb,
+  deleteMaterialFromDb,
 } from './services/firestoreService';
 import { ScannedTimetableResult } from './services/timetableScannerService';
 import { calculateSmartPriority, rebalanceWeeklyPlanWithSchedule, generateSmartStudyPlanFromLecturesAndCourses, SmartStudyPlanGenerationResult } from './utils/smartPlanner';
@@ -145,17 +155,20 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
   const [plantedTrees, setPlantedTrees] = useState<PlantedTree[]>([]);
   const [lectures, setLectures] = useState<CollegeLecture[]>([]);
   const [commute, setCommute] = useState<CollegeCommute>(INITIAL_COLLEGE_COMMUTE);
+  const [materials, setMaterials] = useState<CourseMaterial[]>([]);
   const [coins, setCoins] = useState<number>(0);
   const [unlockedSpecies, setUnlockedSpecies] = useState<TreeSpecies[]>(DEFAULT_UNLOCKED_SPECIES);
 
-  // Modal states
+  // Modal & Drawer states
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [isAddCourseOpen, setIsAddCourseOpen] = useState(false);
   const [isCollegeScheduleOpen, setIsCollegeScheduleOpen] = useState(false);
   const [activeAssessmentTask, setActiveAssessmentTask] = useState<Task | null>(null);
+  const [blueprintTask, setBlueprintTask] = useState<Task | null>(null);
   const [isMainTaskVisible, setIsMainTaskVisible] = useState<boolean>(true);
   const [draftPlanResult, setDraftPlanResult] = useState<SmartStudyPlanGenerationResult | null>(null);
   const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
+  const [taskForScorePrompt, setTaskForScorePrompt] = useState<Task | null>(null);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -174,6 +187,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
         if (data.tasks) setTasks(data.tasks);
         if (data.plantedTrees) setPlantedTrees(data.plantedTrees);
         if (data.lectures) setLectures(data.lectures);
+        if (data.materials) setMaterials(data.materials);
         if (data.profile) setProfile(data.profile);
         if (data.availability) setAvailability(data.availability);
         if (data.commute) setCommute(data.commute);
@@ -280,6 +294,16 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           return nextCoins;
         });
         showToast(`🎉 Completed "${target.name}"! +${earnedCoins} Study Coins earned (${estMinutes}m study) 🪙`);
+
+        // Prompt for score if Exam/Quiz or has maxGrade and no score yet
+        if (
+          (target.type === 'Exam' || target.type === 'Quiz' || typeof target.maxGrade === 'number') &&
+          target.achievedGrade == null
+        ) {
+          setTimeout(() => {
+            setTaskForScorePrompt(target);
+          }, 350);
+        }
       }
 
       nextTasks = prevTasks.map((t) => {
@@ -319,6 +343,91 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
         todayPlan: rebalanceResult.todayPlan,
       });
     }
+  };
+
+  // Handle Save Score from Post-Exam Prompt / Score Modal
+  const handleSaveScore = (
+    taskId: string,
+    achievedGrade: number,
+    maxGrade?: number,
+    weightPercentage?: number
+  ) => {
+    const targetTask = tasks.find((t) => t.id === taskId);
+    if (!targetTask) return;
+
+    const resolvedMax = maxGrade || targetTask.maxGrade || 100;
+    const resolvedWeight = weightPercentage ?? targetTask.weightPercentage;
+    const percentage = Math.round((achievedGrade / resolvedMax) * 1000) / 10;
+    const isMastered = percentage >= 80;
+    const masteryStatus = isMastered ? 'Mastered' : 'Requires Remediation';
+
+    const updatedTask: Task = {
+      ...targetTask,
+      achievedGrade,
+      maxGrade: resolvedMax,
+      weightPercentage: resolvedWeight,
+      conceptMasteryStatus: masteryStatus,
+      status: 'completed',
+      completedAt: targetTask.completedAt || new Date().toISOString(),
+    };
+
+    saveTaskToDb(currentUser.uid, updatedTask);
+
+    let updatedTasksList = tasks.map((t) => (t.id === taskId ? updatedTask : t));
+
+    if (!isMastered) {
+      // Adaptive Remedial Scheduling: score below 80% triggers targeted review and practice tasks
+      const course = courses.find((c) => c.id === targetTask.courseId);
+      const remedialTasks = generateRemedialTasksForExam(targetTask, course, materials);
+
+      for (const remTask of remedialTasks) {
+        saveTaskToDb(currentUser.uid, remTask);
+      }
+
+      updatedTasksList = [...updatedTasksList, ...remedialTasks];
+
+      const rebalanceResult = generateSmartStudyPlanFromLecturesAndCourses({
+        existingCourses: courses,
+        existingTasks: updatedTasksList,
+        lectures,
+        commute,
+        suggestedDailyHours: availability.dailyHours,
+      });
+
+      setTasks(updatedTasksList);
+      setWeeklyPlan(rebalanceResult.weeklyPlan);
+      setTodayPlan(rebalanceResult.todayPlan);
+      updateUserProfileDoc(currentUser.uid, {
+        weeklyPlan: rebalanceResult.weeklyPlan,
+        todayPlan: rebalanceResult.todayPlan,
+      });
+
+      showToast(
+        `⚠️ Score: ${percentage}% (<80%). Scheduled 2 Adaptive Remedial Review sessions into your study plan! 🎯`
+      );
+    } else {
+      const rebalanceResult = generateSmartStudyPlanFromLecturesAndCourses({
+        existingCourses: courses,
+        existingTasks: updatedTasksList,
+        lectures,
+        commute,
+        suggestedDailyHours: availability.dailyHours,
+      });
+
+      setTasks(updatedTasksList);
+      setWeeklyPlan(rebalanceResult.weeklyPlan);
+      setTodayPlan(rebalanceResult.todayPlan);
+      updateUserProfileDoc(currentUser.uid, {
+        weeklyPlan: rebalanceResult.weeklyPlan,
+        todayPlan: rebalanceResult.todayPlan,
+      });
+
+      showToast(
+        `🎉 Mastered! Score: ${percentage}% (≥80%). Course running percentage updated! ⭐`
+      );
+    }
+
+    setTaskForScorePrompt(null);
   };
 
   // Toggle plan item complete
@@ -565,6 +674,48 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
     showToast(`Extracted ${scanned.courses.length} courses, ${scanned.tasks.length} tasks, and generated your study plan!`);
   };
 
+  // Material CRUD Handlers
+  const handleAddMaterial = async (newMat: CourseMaterial) => {
+    const updated = [newMat, ...materials];
+    setMaterials(updated);
+    if (currentUser) {
+      await saveMaterialToDb(currentUser.uid, newMat);
+    }
+
+    // Regenerate smart plan with document grounding context
+    const planResult = generateSmartStudyPlanFromLecturesAndCourses({
+      existingCourses: courses,
+      existingTasks: tasks,
+      lectures,
+      commute,
+      suggestedDailyHours: availability.dailyHours,
+      materials: updated,
+    });
+    setWeeklyPlan(planResult.weeklyPlan);
+    setTodayPlan(planResult.todayPlan);
+    if (currentUser) {
+      await saveBatchScannedWorkspaceData(currentUser.uid, {
+        courses,
+        tasks,
+        lectures,
+        todayPlan: planResult.todayPlan,
+        weeklyPlan: planResult.weeklyPlan,
+        availability,
+      });
+    }
+
+    showToast(`Indexed document "${newMat.title}" and grounded study sessions!`);
+  };
+
+  const handleDeleteMaterial = async (materialId: string) => {
+    const updated = materials.filter((m) => m.id !== materialId);
+    setMaterials(updated);
+    if (currentUser) {
+      await deleteMaterialFromDb(currentUser.uid, materialId);
+    }
+    showToast('Material removed from knowledge base');
+  };
+
   // Generate draft plan for preview modal
   const handleRegeneratePlan = () => {
     const result = generateSmartStudyPlanFromLecturesAndCourses({
@@ -573,6 +724,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
       lectures,
       commute,
       suggestedDailyHours: availability.dailyHours,
+      materials,
     });
 
     setDraftPlanResult(result);
@@ -599,6 +751,50 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
     });
 
     showToast(`Applied and saved customized AI Study Plan (${confirmedWeeklyPlan.length} sessions)!`);
+  };
+
+  // Handle Unfinished Task Rollover
+  const handleApplyRollover = async (
+    updatedTasks: Task[],
+    updatedWeeklyPlan: PlannedSession[],
+    updatedTodayPlan: TodayPlanItem[]
+  ) => {
+    setTasks(updatedTasks);
+    setWeeklyPlan(updatedWeeklyPlan);
+    setTodayPlan(updatedTodayPlan);
+
+    if (currentUser) {
+      await saveBatchScannedWorkspaceData(currentUser.uid, {
+        courses,
+        tasks: updatedTasks,
+        lectures,
+        todayPlan: updatedTodayPlan,
+        weeklyPlan: updatedWeeklyPlan,
+        availability,
+      });
+    }
+
+    showToast('Rolled over and redistributed past unfinished tasks across free study windows!');
+  };
+
+  // Handle Drag-and-Drop / Quick Time Slot Update for Planned Session
+  const handleUpdateSessionTimeSlot = async (sessionId: string, newTimeSlot: string) => {
+    const updatedWeekly = weeklyPlan.map((s) => (s.id === sessionId ? { ...s, timeSlot: newTimeSlot } : s));
+    const updatedToday = todayPlan.map((item) => (item.id === sessionId ? { ...item, timeSlot: newTimeSlot } : item));
+
+    setWeeklyPlan(updatedWeekly);
+    setTodayPlan(updatedToday);
+
+    if (currentUser) {
+      await saveBatchScannedWorkspaceData(currentUser.uid, {
+        courses,
+        tasks,
+        lectures,
+        todayPlan: updatedToday,
+        weeklyPlan: updatedWeekly,
+        availability,
+      });
+    }
   };
 
   // Clear all user workspace data (empty slate)
@@ -662,6 +858,17 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           </div>
         )}
 
+        {/* Global Past Incomplete Task Rollover Prompt Banner */}
+        <UnfinishedTaskRolloverBanner
+          tasks={tasks}
+          courses={courses}
+          weeklyPlan={weeklyPlan}
+          todayPlan={todayPlan}
+          availability={availability}
+          lectures={lectures}
+          onApplyRollover={handleApplyRollover}
+        />
+
         {/* Screen 1: Dashboard */}
         {currentScreen === 'dashboard' && (
           <Dashboard
@@ -697,6 +904,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
             onOpenAddTask={() => setIsAddTaskOpen(true)}
             activeTaskId={focusSession.activeTask?.id}
             onExpandSession={focusSession.expandSession}
+            onOpenScorePrompt={(task) => setTaskForScorePrompt(task)}
           />
         )}
 
@@ -705,10 +913,33 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           <Courses
             courses={courses}
             tasks={tasks}
+            plantedTrees={plantedTrees}
             onOpenAddCourse={() => setIsAddCourseOpen(true)}
             onSelectCourseTasks={() => setCurrentScreen('tasks')}
             onDeleteCourse={handleDeleteCourse}
+            onStartTask={handleStartTask}
+            onToggleTaskComplete={handleToggleTaskComplete}
+            onOpenAddTaskForCourse={() => setIsAddTaskOpen(true)}
           />
+        )}
+
+        {/* Screen 3.5: Materials & Knowledge Base */}
+        {currentScreen === 'materials' && (
+          (profile.role === 'admin' || currentUser.email?.toLowerCase() === 'mohamedelkoramy97@gmail.com') ? (
+            <Materials
+              courses={courses}
+              materials={materials}
+              tasks={tasks}
+              onAddMaterial={handleAddMaterial}
+              onDeleteMaterial={handleDeleteMaterial}
+              onStartFocusSession={handleStartTask}
+            />
+          ) : (
+            <MaterialsComingSoon
+              onNavigateBack={() => setCurrentScreen('dashboard')}
+              userEmail={currentUser.email || undefined}
+            />
+          )
         )}
 
         {/* Screen 4: Planner */}
@@ -723,6 +954,8 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
             onRegeneratePlan={handleRegeneratePlan}
             onOpenCollegeSchedule={() => setIsCollegeScheduleOpen(true)}
             onCheckAssessment={(task) => setActiveAssessmentTask(task)}
+            onStartTask={handleStartTask}
+            onUpdateSessionTimeSlot={handleUpdateSessionTimeSlot}
           />
         )}
 
@@ -799,6 +1032,17 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           />
         )}
       </main>
+
+      {/* Session Blueprint Drawer */}
+      {blueprintTask && (
+        <SessionBlueprintDrawer
+          task={blueprintTask}
+          courses={courses}
+          materials={materials}
+          onClose={() => setBlueprintTask(null)}
+          onStartFocusSession={handleStartTask}
+        />
+      )}
 
       {/* Add Task Modal */}
       <AddTaskModal
@@ -910,6 +1154,15 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
         courses={courses}
         tasks={tasks}
         onConfirmApplyPlan={handleConfirmApplyPlan}
+      />
+
+      {/* Post-Exam Score Check & Adaptive Remedial Prompt Modal */}
+      <ScorePromptModal
+        isOpen={!!taskForScorePrompt}
+        onClose={() => setTaskForScorePrompt(null)}
+        task={taskForScorePrompt}
+        courses={courses}
+        onSaveScore={handleSaveScore}
       />
     </div>
   );

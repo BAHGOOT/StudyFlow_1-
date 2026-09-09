@@ -20,6 +20,7 @@ import {
   CollegeLecture,
   CollegeCommute,
   TreeSpecies,
+  CourseMaterial,
 } from '../types';
 import {
   INITIAL_COURSES,
@@ -31,6 +32,7 @@ import {
   INITIAL_PLANTED_TREES,
   INITIAL_COLLEGE_LECTURES,
   INITIAL_COLLEGE_COMMUTE,
+  INITIAL_MATERIALS,
 } from '../data/initialData';
 import { DEFAULT_UNLOCKED_SPECIES } from '../data/treeSpecies';
 
@@ -44,6 +46,7 @@ export interface UserDataState {
   plantedTrees: PlantedTree[];
   lectures: CollegeLecture[];
   commute: CollegeCommute;
+  materials: CourseMaterial[];
   coins: number;
   unlockedSpecies: TreeSpecies[];
 }
@@ -147,6 +150,9 @@ export async function initializeUserAccount(
         for (const lecture of INITIAL_COLLEGE_LECTURES) {
           await setDoc(doc(db, 'users', userId, 'lectures', lecture.id), cleanForFirestore(lecture), { merge: true });
         }
+        for (const mat of INITIAL_MATERIALS) {
+          await setDoc(doc(db, 'users', userId, 'materials', mat.id), cleanForFirestore(mat), { merge: true });
+        }
       }
     }
   } catch (err) {
@@ -165,6 +171,7 @@ export async function clearAllUserData(userId: string): Promise<void> {
     weeklyPlan: [],
     plantedTrees: [],
     lectures: [],
+    materials: [],
     coins: 0,
     unlockedSpecies: DEFAULT_UNLOCKED_SPECIES,
   };
@@ -177,7 +184,7 @@ export async function clearAllUserData(userId: string): Promise<void> {
     }), { merge: true });
 
     // Delete existing subcollections documents
-    const subcollections = ['courses', 'tasks', 'plantedTrees', 'lectures'];
+    const subcollections = ['courses', 'tasks', 'plantedTrees', 'lectures', 'materials'];
     for (const sub of subcollections) {
       const collRef = collection(db, 'users', userId, sub);
       const snaps = await getDocs(collRef);
@@ -201,6 +208,7 @@ export async function populateSampleData(userId: string): Promise<void> {
     weeklyPlan: INITIAL_WEEKLY_PLAN,
     plantedTrees: INITIAL_PLANTED_TREES,
     lectures: INITIAL_COLLEGE_LECTURES,
+    materials: INITIAL_MATERIALS,
     coins: 100,
     unlockedSpecies: DEFAULT_UNLOCKED_SPECIES,
   };
@@ -223,6 +231,9 @@ export async function populateSampleData(userId: string): Promise<void> {
     }
     for (const lecture of INITIAL_COLLEGE_LECTURES) {
       await setDoc(doc(db, 'users', userId, 'lectures', lecture.id), cleanForFirestore(lecture), { merge: true });
+    }
+    for (const mat of INITIAL_MATERIALS) {
+      await setDoc(doc(db, 'users', userId, 'materials', mat.id), cleanForFirestore(mat), { merge: true });
     }
   } catch (err) {
     console.warn('Error populating sample data:', err);
@@ -316,12 +327,27 @@ export function subscribeToUserData(
     }
   );
 
+  // 6. Listen to materials subcollection
+  const materialsColl = collection(db, 'users', userId, 'materials');
+  const unsubMaterials = onSnapshot(
+    materialsColl,
+    (snapshot) => {
+      const materials = snapshot.docs.map((d) => d.data() as CourseMaterial);
+      materials.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+      onData({ materials });
+    },
+    (err) => {
+      console.warn('Materials listener notification:', err.message);
+    }
+  );
+
   return () => {
     unsubUser();
     unsubCourses();
     unsubTasks();
     unsubTrees();
     unsubLectures();
+    unsubMaterials();
   };
 }
 
@@ -336,6 +362,26 @@ export async function updateUserProfileDoc(userId: string, data: Partial<UserDat
     await setDoc(userDocRef, sanitized, { merge: true });
   } catch (err) {
     console.warn('Firestore updateUserProfileDoc error:', err);
+  }
+}
+
+// Material CRUD
+export async function saveMaterialToDb(userId: string, material: CourseMaterial): Promise<void> {
+  try {
+    const matDoc = doc(db, 'users', userId, 'materials', material.id);
+    const sanitized = cleanForFirestore(material);
+    await setDoc(matDoc, sanitized, { merge: true });
+  } catch (err) {
+    console.error('Firestore saveMaterialToDb failed:', err);
+  }
+}
+
+export async function deleteMaterialFromDb(userId: string, materialId: string): Promise<void> {
+  try {
+    const matDoc = doc(db, 'users', userId, 'materials', materialId);
+    await deleteDoc(matDoc);
+  } catch (err) {
+    console.error('Firestore deleteMaterialFromDb failed:', err);
   }
 }
 

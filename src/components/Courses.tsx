@@ -1,24 +1,35 @@
 import { useState } from 'react';
-import { Course, Task } from '../types';
-import { Plus, BookOpen, Calendar, ArrowRight, Trash2 } from 'lucide-react';
+import { Course, Task, PlantedTree } from '../types';
+import { Plus, BookOpen, Calendar, ArrowRight, Trash2, Eye, Award, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { formatDeadlineRelative } from '../utils/smartPlanner';
+import { CourseDetailModal } from './CourseDetailModal';
+import { calculateCourseGrade, getStatusBadgeConfig } from '../utils/gradeCalculator';
 
 interface CoursesProps {
   courses: Course[];
   tasks: Task[];
+  plantedTrees?: PlantedTree[];
   onOpenAddCourse: () => void;
   onSelectCourseTasks: (courseId: string) => void;
   onDeleteCourse?: (courseId: string) => void;
+  onStartTask?: (task: Task) => void;
+  onToggleTaskComplete?: (taskId: string) => void;
+  onOpenAddTaskForCourse?: (courseId: string) => void;
 }
 
 export function Courses({
   courses,
   tasks,
+  plantedTrees = [],
   onOpenAddCourse,
   onSelectCourseTasks,
   onDeleteCourse,
+  onStartTask,
+  onToggleTaskComplete,
+  onOpenAddTaskForCourse,
 }: CoursesProps) {
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
+  const [selectedCourseForDetail, setSelectedCourseForDetail] = useState<Course | null>(null);
 
   // Dynamic Course stats helper
   const getCourseStats = (course: Course) => {
@@ -105,12 +116,15 @@ export function Courses({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {courses.map((course) => {
             const stats = getCourseStats(course);
+            const gradeSummary = calculateCourseGrade(course.id, tasks);
+            const badgeConfig = getStatusBadgeConfig(gradeSummary.statusBadge);
 
             return (
               <div
                 key={course.id}
                 id={`course-card-${course.id}`}
-                className="group relative bg-white rounded-2xl border border-slate-200/90 p-6 hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col justify-between"
+                onClick={() => setSelectedCourseForDetail(course)}
+                className="group relative bg-white rounded-2xl border border-slate-200/90 p-6 hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col justify-between cursor-pointer"
               >
                 {/* Header with color indicator */}
                 <div>
@@ -135,9 +149,12 @@ export function Courses({
                     {onDeleteCourse && (
                       <button
                         type="button"
-                        onClick={() => setCourseToDelete(course)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCourseToDelete(course);
+                        }}
                         title="Delete Course"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -171,6 +188,69 @@ export function Courses({
                     </div>
                   </div>
 
+                  {/* Academic Grade & Performance Indicator */}
+                  <div
+                    id={`course-grade-indicator-${course.id}`}
+                    className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/80 mb-4 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <Award className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Course Grade</span>
+                      </span>
+
+                      {gradeSummary.hasGrades ? (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${badgeConfig.badgeClass}`}
+                        >
+                          {gradeSummary.statusBadge === 'Excellence' && (
+                            <Sparkles className="w-2.5 h-2.5" />
+                          )}
+                          {gradeSummary.statusBadge === 'On Track' && (
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                          )}
+                          {gradeSummary.statusBadge === 'Needs Review' && (
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                          )}
+                          <span>{badgeConfig.label}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-slate-400 bg-slate-200/60 px-2 py-0.5 rounded-full">
+                          {gradeSummary.pendingCount > 0 ? `${gradeSummary.pendingCount} Pending` : 'Pending Grades'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-baseline justify-between">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-extrabold font-mono text-slate-900">
+                          {gradeSummary.hasGrades ? gradeSummary.percentageFormatted : '— %'}
+                        </span>
+                        {gradeSummary.hasGrades && (
+                          <span className="text-xs font-bold text-slate-500 font-display">
+                            ({gradeSummary.letterGrade})
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        {gradeSummary.hasGrades
+                          ? `${gradeSummary.totalAchievedPoints}/${gradeSummary.totalPossiblePoints} pts (${gradeSummary.gradedCount} graded)`
+                          : 'No graded tests yet'}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-500 rounded-full ${
+                          gradeSummary.hasGrades ? badgeConfig.progressBarClass : 'bg-slate-300'
+                        }`}
+                        style={{ width: `${gradeSummary.hasGrades ? Math.min(100, Math.max(5, gradeSummary.percentage)) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+
                   {/* Next deadline */}
                   <div className="flex items-center justify-between text-xs text-slate-600 mb-4">
                     <span className="flex items-center gap-1.5 text-slate-500">
@@ -184,12 +264,16 @@ export function Courses({
                 </div>
 
                 {/* Bottom card CTA */}
-                <div className="pt-3 border-t border-slate-100 mt-2">
+                <div className="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between">
                   <button
-                    onClick={() => onSelectCourseTasks(course.id)}
-                    className="w-full flex items-center justify-between text-xs font-semibold text-indigo-600 group-hover:text-indigo-700 transition-colors py-1"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCourseForDetail(course);
+                    }}
+                    className="flex items-center justify-between w-full text-xs font-semibold text-indigo-600 group-hover:text-indigo-700 transition-colors py-1 cursor-pointer"
                   >
-                    <span>View Course Tasks</span>
+                    <span>View Course Breakdown & Tasks</span>
                     <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
                   </button>
                 </div>
@@ -198,6 +282,18 @@ export function Courses({
           })}
         </div>
       )}
+
+      {/* Course Detail Modal */}
+      <CourseDetailModal
+        isOpen={Boolean(selectedCourseForDetail)}
+        onClose={() => setSelectedCourseForDetail(null)}
+        course={selectedCourseForDetail}
+        tasks={tasks}
+        plantedTrees={plantedTrees}
+        onStartTask={onStartTask || (() => {})}
+        onToggleTaskComplete={onToggleTaskComplete || (() => {})}
+        onOpenAddTaskForCourse={onOpenAddTaskForCourse || (() => {})}
+      />
 
       {/* Delete Course Confirmation Modal */}
       {courseToDelete && (

@@ -185,6 +185,189 @@ Return strictly valid JSON conforming to this schema:
   }
 });
 
+// AI Material Indexing & Topic Extraction Endpoint
+app.post('/api/materials/index', async (req, res) => {
+  try {
+    const { title, fileName, fileType, courseName, textContent } = req.body;
+
+    const prompt = `You are an expert AI academic document indexer.
+Analyze the following course study document ("${title || fileName}" for course "${courseName || 'General Course'}").
+Content or excerpt:
+${textContent ? String(textContent).slice(0, 8000) : 'Standard university lecture note or course syllabus.'}
+
+Extract structured study metadata according to this exact JSON schema:
+{
+  "pageCount": estimated total pages or slides (integer, e.g. 24),
+  "topicsSummary": ["3 to 5 core high-level topic badges, e.g., Derivatives, Vector Flux, Dijkstra"],
+  "chapterOutline": [
+    {
+      "title": "Chapter or Section Title",
+      "pageRange": "Pages 10–25",
+      "summary": "Key summary of this section's core focus"
+    }
+  ],
+  "keyFormulasAndConcepts": [
+    {
+      "concept": "Concept or Theorem Name",
+      "formulaOrRule": "Mathematical formula, equation, or core rule if applicable",
+      "description": "Clear explanation"
+    }
+  ],
+  "practiceProblems": [
+    "Specific practice exercise target e.g., Problem 3.1: Calculate derivatives"
+  ]
+}`;
+
+    const ai = getAI();
+    let responseText = '{}';
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+      responseText = response.text || '{}';
+    } catch {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+      responseText = response.text || '{}';
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    }
+
+    res.json({
+      success: true,
+      data: parsed,
+    });
+  } catch (err: any) {
+    console.error('Error indexing material:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Indexing failed' });
+  }
+});
+
+// Ask Document AI Endpoint
+app.post('/api/materials/ask', async (req, res) => {
+  try {
+    const { question, materialContext, taskContext } = req.body;
+
+    const prompt = `You are StudyFlow AI Tutor, an expert academic study assistant.
+The student is currently working on:
+Task: ${taskContext?.name || 'Study Session'} (${taskContext?.courseName || 'Course'})
+Material Title: ${materialContext?.title || 'Course Material'}
+Topics: ${JSON.stringify(materialContext?.topicsSummary || [])}
+Chapter Outline: ${JSON.stringify(materialContext?.chapterOutline || [])}
+Formulas & Concepts: ${JSON.stringify(materialContext?.keyFormulasAndConcepts || [])}
+Practice Problems: ${JSON.stringify(materialContext?.practiceProblems || [])}
+
+Student Question: "${question}"
+
+Provide a clear, structured, encouraging, and accurate answer grounded directly in the provided course material.
+Use clear formatting, bullet points, latex equations, and step-by-step explanations where helpful.`;
+
+    const ai = getAI();
+    let responseText = 'Unable to answer question.';
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
+      responseText = response.text || 'No response generated.';
+    } catch {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: prompt,
+      });
+      responseText = response.text || 'No response generated.';
+    }
+
+    res.json({
+      success: true,
+      answer: responseText,
+    });
+  } catch (err: any) {
+    console.error('Error asking document AI:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Failed to generate answer' });
+  }
+});
+
+// Generate Practice Quiz Grounded in Material Endpoint
+app.post('/api/materials/quiz', async (req, res) => {
+  try {
+    const { materialContext, taskContext } = req.body;
+
+    const prompt = `You are an expert AI professor. Generate an interactive 3-question multiple-choice practice quiz grounded strictly in this study material:
+Task: ${taskContext?.name || 'Study Session'}
+Material: ${materialContext?.title || 'Course Material'}
+Formulas & Concepts: ${JSON.stringify(materialContext?.keyFormulasAndConcepts || [])}
+Practice Problems: ${JSON.stringify(materialContext?.practiceProblems || [])}
+
+Return JSON with this schema:
+{
+  "quizTitle": "Practice Quiz: ${materialContext?.title || 'Course Material'}",
+  "questions": [
+    {
+      "id": "q1",
+      "question": "Clear academic question text...",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctOptionIndex": 0,
+      "explanation": "Detailed step-by-step explanation of why this is correct."
+    }
+  ]
+}`;
+
+    const ai = getAI();
+    let responseText = '{}';
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+      responseText = response.text || '{}';
+    } catch {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+      responseText = response.text || '{}';
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    }
+
+    res.json({
+      success: true,
+      quiz: parsed,
+    });
+  } catch (err: any) {
+    console.error('Error generating quiz:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Failed to generate quiz' });
+  }
+});
+
 async function startServer() {
   // Vite middleware in dev mode
   if (process.env.NODE_ENV !== 'production') {

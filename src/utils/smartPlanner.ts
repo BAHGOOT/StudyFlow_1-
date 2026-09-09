@@ -6,6 +6,7 @@ import {
   PlannedSession,
   CollegeLecture,
   CollegeCommute,
+  CourseMaterial,
 } from '../types';
 
 /**
@@ -737,18 +738,71 @@ export function generateSmartStudyPlanFromLecturesAndCourses({
   lectures,
   commute,
   suggestedDailyHours,
+  materials = [],
 }: {
   existingCourses: Course[];
   existingTasks: Task[];
   lectures: CollegeLecture[];
-  commute: CollegeCommute;
+  commute?: CollegeCommute;
   suggestedDailyHours: StudyAvailability['dailyHours'];
   autoGenerateTasks?: boolean;
+  materials?: CourseMaterial[];
 }): SmartStudyPlanGenerationResult {
+  const activeCommute: CollegeCommute = commute || { commuteToCollegeMinutes: 15, commuteFromCollegeMinutes: 15 };
   const allCourses = [...existingCourses];
   const newCourses: Course[] = [];
   let allTasks = [...existingTasks];
   const newTasks: Task[] = [];
+
+  // Helper to ground a task in course materials
+  const groundTaskInMaterial = (task: Task, course: Course): Task => {
+    const courseMats = materials.filter(
+      (m) => m.courseId === course.id || (m.courseName && m.courseName.toLowerCase() === course.name.toLowerCase())
+    );
+    if (courseMats.length === 0) {
+      return {
+        ...task,
+        exactReading: task.exactReading || `Section 2.1–2.4 in ${course.name} Core Textbook`,
+        targetOutcome: task.targetOutcome || `By the end of this session, master key theoretical principles of ${course.name}.`,
+        exerciseTarget: task.exerciseTarget || `Complete Problem Set Exercises 1–10.`,
+        keyConceptsList: task.keyConceptsList || [`${course.name} Foundations`, 'Analytical Methods'],
+      };
+    }
+    const mat = courseMats[0];
+    const outlineItem = mat.chapterOutline[0];
+    return {
+      ...task,
+      materialId: mat.id,
+      materialTitle: mat.title,
+      exactReading:
+        task.exactReading ||
+        (outlineItem?.pageRange ? `${outlineItem.pageRange} in ${mat.title}` : `Pages 1–30 in ${mat.title}`),
+      targetOutcome:
+        task.targetOutcome ||
+        (outlineItem?.summary
+          ? `By the end of this session: ${outlineItem.summary}`
+          : `Master foundational principles from ${mat.title}.`),
+      exerciseTarget:
+        task.exerciseTarget ||
+        (mat.practiceProblems && mat.practiceProblems.length > 0
+          ? mat.practiceProblems[0]
+          : `Complete Exercises in ${mat.title}`),
+      keyConceptsList:
+        task.keyConceptsList ||
+        (mat.keyFormulasAndConcepts && mat.keyFormulasAndConcepts.length > 0
+          ? mat.keyFormulasAndConcepts.map((k) => k.concept)
+          : mat.topicsSummary || []),
+    };
+  };
+
+  // Ground all existing tasks in course materials if applicable
+  allTasks = allTasks.map((t) => {
+    const matchedCourse = allCourses.find((c) => c.id === t.courseId);
+    if (matchedCourse) {
+      return groundTaskInMaterial(t, matchedCourse);
+    }
+    return t;
+  });
 
   // If the student has courses, ensure there are study tasks scaled by credit hours & importance!
   if (existingCourses.length > 0) {
@@ -875,7 +929,7 @@ export function generateSmartStudyPlanFromLecturesAndCourses({
 
   // Rebalance weekly plan using schedule constraints, credit weights, and guaranteed rest day
   const weeklyPlan = allTasks.length > 0
-    ? rebalanceWeeklyPlanWithSchedule(allTasks, updatedAvailability, lectures, commute, allCourses)
+    ? rebalanceWeeklyPlanWithSchedule(allTasks, updatedAvailability, lectures, activeCommute, allCourses)
     : [];
 
   const restDay = determineOptimalRestDay(allTasks, lectures);

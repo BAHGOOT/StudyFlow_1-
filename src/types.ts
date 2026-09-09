@@ -29,6 +29,51 @@ export interface Task {
   completedAt?: string;
   smartPriorityScore: number;
   urgencyReason?: string;
+  // Context-grounded task details
+  materialId?: string;
+  materialTitle?: string;
+  exactReading?: string; // e.g. "Pages 142–158 in Manufacturing Tech Vol. 2"
+  targetOutcome?: string; // e.g. "By the end of this session, you will master 2nd order ODEs"
+  exerciseTarget?: string; // e.g. "Problems 12–18 on Page 155"
+  keyConceptsList?: string[];
+  // Grade tracking & performance fields
+  maxGrade?: number; // e.g., 20 or 100
+  weightPercentage?: number; // e.g., 15 (%)
+  achievedGrade?: number; // e.g., 14
+  isRemedial?: boolean; // Flag for targeted remedial session
+  remedialSourceExamId?: string;
+  remedialSourceExamName?: string;
+  conceptMasteryStatus?: 'Mastered' | 'Requires Remediation' | 'Pending';
+}
+
+export interface MaterialOutlineTopic {
+  title: string;
+  pageRange?: string; // e.g. "Pages 42–58"
+  summary: string;
+}
+
+export interface MaterialFormulaConcept {
+  concept: string;
+  formulaOrRule?: string;
+  description: string;
+}
+
+export interface CourseMaterial {
+  id: string;
+  userId?: string;
+  courseId: string;
+  courseName?: string;
+  title: string;
+  fileName: string;
+  fileType: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc';
+  fileSizeStr?: string;
+  pageCount?: number;
+  uploadedAt: string; // ISO string
+  topicsSummary: string[];
+  chapterOutline: MaterialOutlineTopic[];
+  keyFormulasAndConcepts: MaterialFormulaConcept[];
+  practiceProblems: string[];
+  fileDataUrl?: string; // Stored content for document Q&A
 }
 
 export interface TodayPlanItem {
@@ -130,6 +175,7 @@ export type NavScreen =
   | 'dashboard'
   | 'tasks'
   | 'courses'
+  | 'materials'
   | 'planner'
   | 'forest'
   | 'store'

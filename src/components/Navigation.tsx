@@ -9,6 +9,7 @@ import {
   Sparkles,
   Trees,
   ShoppingBag,
+  Library,
 } from 'lucide-react';
 import { NavScreen, StudentProfile } from '../types';
 
@@ -33,6 +34,7 @@ export function Navigation({
   coins = 0,
   onSignOut,
 }: NavigationProps) {
+  const isAdmin = profile.role === 'admin' || userEmail?.toLowerCase() === 'mohamedelkoramy97@gmail.com';
   const initials = (profile.name || 'Student')
     .split(' ')
     .map((n) => n[0])
@@ -48,6 +50,7 @@ export function Navigation({
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tasks', label: 'My Tasks', icon: CheckSquare },
     { id: 'courses', label: 'Courses', icon: GraduationCap },
+    { id: 'materials', label: 'Materials', icon: Library },
     { id: 'planner', label: 'Planner', icon: Calendar },
     {
       id: 'forest',
@@ -160,6 +163,11 @@ export function Navigation({
                   {item.badge && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-transparent dark:border-emerald-800">
                       🌲 {item.badge}
+                    </span>
+                  )}
+                  {item.id === 'materials' && !isAdmin && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/40">
+                      Soon
                     </span>
                   )}
                   {item.id === 'store' && (

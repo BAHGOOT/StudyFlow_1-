@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Maximize2,
   Timer,
+  Award,
 } from 'lucide-react';
 import { formatDeadlineRelative, formatDuration } from '../utils/smartPlanner';
 
@@ -25,6 +26,7 @@ interface MyTasksProps {
   onOpenAddTask: () => void;
   activeTaskId?: string;
   onExpandSession?: () => void;
+  onOpenScorePrompt?: (task: Task) => void;
 }
 
 type FilterOption = 'All' | 'Today' | 'Upcoming' | 'Overdue' | 'Completed';
@@ -85,6 +87,7 @@ export function MyTasks({
   onOpenAddTask,
   activeTaskId,
   onExpandSession,
+  onOpenScorePrompt,
 }: MyTasksProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterOption>('All');
@@ -252,6 +255,34 @@ export function MyTasks({
                     <span>In Progress</span>
                   </span>
                 )}
+
+                {/* Remedial Task Badge */}
+                {task.isRemedial && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                    <Sparkles className="w-3 h-3 text-amber-600" />
+                    <span>🎯 Remedial Review</span>
+                  </span>
+                )}
+
+                {/* Achieved Score Badge */}
+                {typeof task.achievedGrade === 'number' && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenScorePrompt && onOpenScorePrompt(task)}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border transition-colors cursor-pointer ${
+                      (task.achievedGrade / (task.maxGrade || 100)) >= 0.8
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                        : 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
+                    }`}
+                    title="Click to view/edit assessment score"
+                  >
+                    <Award className="w-3 h-3" />
+                    <span>
+                      Score: {task.achievedGrade}/{task.maxGrade || 100} ({Math.round((task.achievedGrade / (task.maxGrade || 100)) * 100)}%)
+                      {(task.achievedGrade / (task.maxGrade || 100)) >= 0.8 ? ' • Mastered' : ' • Remedial'}
+                    </span>
+                  </button>
+                )}
               </div>
 
               {/* Simplified Title */}
@@ -262,6 +293,16 @@ export function MyTasks({
               >
                 {simplifyTaskTitle(task.name)}
               </h3>
+
+              {/* Remedial Objective Banner */}
+              {task.isRemedial && (
+                <div className="py-1.5 px-3 bg-amber-50/90 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-start gap-1.5 my-1">
+                  <span className="font-extrabold text-amber-800 shrink-0">Objective:</span>
+                  <span className="leading-snug">
+                    {task.targetOutcome || `Remedial Review: Focus on weaker topics from ${task.remedialSourceExamName || 'assessment'} to boost course grade.`}
+                  </span>
+                </div>
+              )}
 
               {task.notes && (
                 <p className="text-xs text-slate-500 line-clamp-1">{task.notes}</p>
@@ -329,6 +370,26 @@ export function MyTasks({
                   <span>{task.status === 'in_progress' ? 'Resume' : 'Start'}</span>
                 </button>
               )
+            )}
+
+            {/* Assessment Score Action Button */}
+            {(task.type === 'Exam' || task.type === 'Quiz' || typeof task.maxGrade === 'number') && (
+              <button
+                type="button"
+                id={`record-score-btn-${task.id}`}
+                onClick={() => onOpenScorePrompt && onOpenScorePrompt(task)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  typeof task.achievedGrade === 'number'
+                    ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    : isCompleted
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs animate-pulse'
+                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                }`}
+                title={typeof task.achievedGrade === 'number' ? 'Edit assessment score' : 'Enter assessment score'}
+              >
+                <Award className="w-3.5 h-3.5 text-current" />
+                <span>{typeof task.achievedGrade === 'number' ? 'Score' : 'Enter Score'}</span>
+              </button>
             )}
 
             <button

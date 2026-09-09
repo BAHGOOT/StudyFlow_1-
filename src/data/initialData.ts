@@ -8,7 +8,147 @@ import {
   PlantedTree,
   CollegeLecture,
   CollegeCommute,
+  CourseMaterial,
 } from '../types';
+
+export const INITIAL_MATERIALS: CourseMaterial[] = [
+  {
+    id: 'mat-calc-1',
+    courseId: 'course-calc',
+    courseName: 'Calculus',
+    title: 'Multivariable Calculus & Partial Derivatives Guide',
+    fileName: 'Calculus_Ch3_Multivariable_Notes.pdf',
+    fileType: 'pdf',
+    fileSizeStr: '4.2 MB',
+    pageCount: 28,
+    uploadedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+    topicsSummary: ['Gradients & Directional Derivatives', 'Lagrange Multipliers', 'Double Integrals in Polar Coordinates'],
+    chapterOutline: [
+      {
+        title: 'Chapter 3.1: Partial Derivatives & Gradient Vectors',
+        pageRange: 'Pages 120–135',
+        summary: 'Definition of ∇f, directional derivative formula D_u f = ∇f · u, and steepest descent interpretation.',
+      },
+      {
+        title: 'Chapter 3.2: Optimization & Lagrange Multipliers',
+        pageRange: 'Pages 136–148',
+        summary: 'Constrained optimization method using ∇f = λ∇g for finding local extrema on surfaces.',
+      },
+      {
+        title: 'Chapter 3.3: Multiple Integrals & Polar Transformations',
+        pageRange: 'Pages 149–165',
+        summary: 'Double integrals over general regions with Jacobian determinants r dr dθ.',
+      },
+    ],
+    keyFormulasAndConcepts: [
+      {
+        concept: 'Gradient Vector Formula',
+        formulaOrRule: '∇f(x, y) = (∂f/∂x) i + (∂f/∂y) j',
+        description: 'Represents the vector pointing in the direction of maximum rate of increase of f.',
+      },
+      {
+        concept: 'Lagrange Multiplier Equation',
+        formulaOrRule: '∇f(x, y, z) = λ ∇g(x, y, z)',
+        description: 'System of equations used to maximize/minimize f subject to constraint g(x,y,z) = c.',
+      },
+      {
+        concept: 'Directional Derivative',
+        formulaOrRule: 'D_u f = ∇f · u (where u is a unit vector)',
+        description: 'Rate of change of f in the direction of unit vector u.',
+      },
+    ],
+    practiceProblems: [
+      'Problem 3.4: Compute the gradient ∇f for f(x,y,z) = x²y + sin(yz) at (1, 2, 0).',
+      'Problem 3.12: Use Lagrange multipliers to find the maximum volume of a box inside x²/a² + y²/b² + z²/c² = 1.',
+      'Problem 3.18: Evaluate ∬ (x² + y²) dA over the region bounded by x² + y² = 4.',
+    ],
+  },
+  {
+    id: 'mat-phys-1',
+    courseId: 'course-phys',
+    courseName: 'Physics',
+    title: 'Electromagnetism, Gauss Law & Flux Lecture Slides',
+    fileName: 'PHYS210_Lectures_EM_Flux.pptx',
+    fileType: 'slides',
+    fileSizeStr: '8.1 MB',
+    pageCount: 42,
+    uploadedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+    topicsSummary: ['Electric Field Flux', 'Gauss Law Symmetries', 'Capacitance & Energy Storage'],
+    chapterOutline: [
+      {
+        title: 'Slide Deck 4: Electric Flux & Enclosed Charge',
+        pageRange: 'Slides 1–15',
+        summary: 'Quantifying field lines passing through closed surfaces: Φ_E = ∮ E · dA.',
+      },
+      {
+        title: 'Slide Deck 5: Spherical & Cylindrical Gauss Surfaces',
+        pageRange: 'Slides 16–30',
+        summary: 'Applying Gauss Law E(4πr²) = Q_enc/ε₀ for uniform charge distributions.',
+      },
+      {
+        title: 'Slide Deck 6: Parallel Plate Capacitors & Dielectrics',
+        pageRange: 'Slides 31–42',
+        summary: 'Capacitance formula C = ε₀A/d and energy density u = ½ε₀E².',
+      },
+    ],
+    keyFormulasAndConcepts: [
+      {
+        concept: 'Gauss Law for Magnetism & Electricity',
+        formulaOrRule: 'Φ_E = ∮ E · dA = Q_enclosed / ε₀',
+        description: 'Fundamental Maxwell equation relating electric field flux to net enclosed charge.',
+      },
+      {
+        concept: 'Capacitor Energy Density',
+        formulaOrRule: 'U = ½ C V² = ½ (ε₀ A / d) V²',
+        description: 'Stored potential energy in an electric field between conductive plates.',
+      },
+    ],
+    practiceProblems: [
+      'Exercise 5.2: Calculate the E-field at distance r inside a non-conducting sphere of uniform charge density ρ.',
+      'Exercise 5.8: A cylindrical shell has radius R and length L. Find electric flux through the end caps.',
+    ],
+  },
+  {
+    id: 'mat-prog-1',
+    courseId: 'course-prog',
+    courseName: 'Programming',
+    title: 'Data Structures & Algorithms: Graphs & Dynamic Programming',
+    fileName: 'CS220_Graphs_And_DP_Syllabus_Notes.pdf',
+    fileType: 'pdf',
+    fileSizeStr: '2.5 MB',
+    pageCount: 35,
+    uploadedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+    topicsSummary: ['Dijkstra Shortest Path Algorithm', 'A* Search Heuristics', 'Dynamic Programming Memoization'],
+    chapterOutline: [
+      {
+        title: 'Module 7: Shortest Path Graph Traversal',
+        pageRange: 'Pages 80–105',
+        summary: 'Priority queue implementation of Dijkstra algorithm with time complexity O((V + E) log V).',
+      },
+      {
+        title: 'Module 8: 0/1 Knapsack & Memoization Tables',
+        pageRange: 'Pages 106–125',
+        summary: 'Top-down recursive memoization versus bottom-up tabular dynamic programming.',
+      },
+    ],
+    keyFormulasAndConcepts: [
+      {
+        concept: 'Dijkstra Time Complexity',
+        formulaOrRule: 'O((V + E) log V) with Min-Heap',
+        description: 'Guarantees non-negative edge weight shortest path extraction.',
+      },
+      {
+        concept: 'A* Evaluation Function',
+        formulaOrRule: 'f(n) = g(n) + h(n)',
+        description: 'Combines actual path cost g(n) with admissible heuristic estimate h(n).',
+      },
+    ],
+    practiceProblems: [
+      'Problem 7.1: Implement Dijkstra algorithm with adjacency list representation in Python/TypeScript.',
+      'Problem 8.3: Solve 0/1 Knapsack for weights [2, 3, 4, 5] and values [3, 4, 5, 6] with capacity W = 8.',
+    ],
+  },
+];
 
 export const INITIAL_COURSES: Course[] = [
   {

@@ -30,6 +30,8 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
   const [importance, setImportance] = useState(4);
   const [difficulty, setDifficulty] = useState(3);
   const [notes, setNotes] = useState('');
+  const [maxGrade, setMaxGrade] = useState<string>('');
+  const [weightPercentage, setWeightPercentage] = useState<string>('');
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
@@ -62,6 +64,9 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
       return;
     }
 
+    const parsedMaxGrade = maxGrade ? parseFloat(maxGrade) : (type === 'Exam' || type === 'Quiz' ? 100 : undefined);
+    const parsedWeight = weightPercentage ? parseFloat(weightPercentage) : undefined;
+
     const newTask: Task = {
       id: `task-${Date.now()}`,
       name: name.trim(),
@@ -75,6 +80,8 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
       status: 'todo',
       smartPriorityScore: calculated.score,
       urgencyReason: calculated.reason,
+      maxGrade: parsedMaxGrade && !isNaN(parsedMaxGrade) ? parsedMaxGrade : undefined,
+      weightPercentage: parsedWeight && !isNaN(parsedWeight) ? parsedWeight : undefined,
     };
 
     onAddTask(newTask);
@@ -82,6 +89,8 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
     // Reset form
     setName('');
     setNotes('');
+    setMaxGrade('');
+    setWeightPercentage('');
     setError('');
   };
 
@@ -300,6 +309,58 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
                 ))}
               </div>
               <p className="text-[11px] text-slate-400 mt-1">Mental effort & complexity</p>
+            </div>
+          </div>
+
+          {/* Optional Exam & Quiz Grade Tracking Fields */}
+          <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Assessment & Grade Tracking</span>
+                {(type === 'Exam' || type === 'Quiz' || type === 'Assignment') && (
+                  <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    Recommended for {type}
+                  </span>
+                )}
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium">Optional</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Max Points / Max Score
+                </label>
+                <input
+                  id="task-max-grade-input"
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  placeholder={type === 'Exam' ? '100' : '20'}
+                  value={maxGrade}
+                  onChange={(e) => setMaxGrade(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+                />
+                <p className="text-[10px] text-slate-400 mt-0.5">e.g., 20, 50, 100 total pts</p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Course Weight (%)
+                </label>
+                <input
+                  id="task-weight-percent-input"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="100"
+                  placeholder="e.g. 15"
+                  value={weightPercentage}
+                  onChange={(e) => setWeightPercentage(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white"
+                />
+                <p className="text-[10px] text-slate-400 mt-0.5">% of overall course grade</p>
+              </div>
             </div>
           </div>
 

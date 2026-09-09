@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, DragEvent } from 'react';
 import { Course, Task, PlannedSession, StudyAvailability, CollegeLecture } from '../types';
 import {
   ChevronLeft,
@@ -20,6 +20,7 @@ import {
   CalendarCheck,
   AlertCircle,
   Play,
+  GripVertical,
 } from 'lucide-react';
 import { formatDuration } from '../utils/smartPlanner';
 
@@ -33,6 +34,8 @@ interface PlannerProps {
   onRegeneratePlan: () => void;
   onOpenCollegeSchedule?: () => void;
   onCheckAssessment?: (task: Task) => void;
+  onStartTask?: (task: Task) => void;
+  onUpdateSessionTimeSlot?: (sessionId: string, newTimeSlot: string) => void;
 }
 
 const DAYS_OF_WEEK: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[] = [
@@ -68,6 +71,8 @@ export function Planner({
   onRegeneratePlan,
   onOpenCollegeSchedule,
   onCheckAssessment,
+  onStartTask,
+  onUpdateSessionTimeSlot,
 }: PlannerProps) {
   const currentDayOfWeekName = (['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()] || 'Monday') as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
 
@@ -76,8 +81,40 @@ export function Planner({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
 
+  // Drag-and-drop interactive state
+  const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
+  const [dragOverHour, setDragOverHour] = useState<number | null>(null);
+
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
   const getTask = (taskId: string) => tasks.find((t) => t.id === taskId);
+
+  const handleDragStartSession = (e: React.DragEvent, sessionId: string) => {
+    e.dataTransfer.setData('text/plain', sessionId);
+    setDraggingSessionId(sessionId);
+  };
+
+  const handleDragOverHour = (e: React.DragEvent, hour: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverHour !== hour) {
+      setDragOverHour(hour);
+    }
+  };
+
+  const handleDropOnHour = (e: React.DragEvent, hour: number) => {
+    e.preventDefault();
+    const sessionId = e.dataTransfer.getData('text/plain') || draggingSessionId;
+    setDragOverHour(null);
+    setDraggingSessionId(null);
+    if (!sessionId) return;
+
+    const formattedSlot = `${hour < 10 ? '0' + hour : hour}:00`;
+    if (onUpdateSessionTimeSlot) {
+      onUpdateSessionTimeSlot(sessionId, formattedSlot);
+    }
+    setFeedbackToast(`Moved study block to ${formatHourLabel(hour)}`);
+    setTimeout(() => setFeedbackToast(null), 3000);
+  };
 
   const handleRegenerate = () => {
     setIsRegenerating(true);
@@ -522,8 +559,14 @@ export function Planner({
                 return (
                   <div
                     key={hour}
-                    className={`flex flex-col md:flex-row min-h-[72px] transition-colors ${
-                      isCurrentHour ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'
+                    onDragOver={(e) => handleDragOverHour(e, hour)}
+                    onDrop={(e) => handleDropOnHour(e, hour)}
+                    className={`flex flex-col md:flex-row min-h-[72px] transition-all ${
+                      dragOverHour === hour
+                        ? 'bg-indigo-100/70 dark:bg-indigo-950/60 ring-2 ring-indigo-500 ring-inset'
+                        : isCurrentHour
+                        ? 'bg-indigo-50/30'
+                        : 'hover:bg-slate-50/50'
                     }`}
                   >
                     {/* Time Label Column */}
@@ -551,17 +594,25 @@ export function Planner({
                           return (
                             <div
                               key={session.id}
-                              className={`p-4 rounded-xl border text-sm transition-all shadow-2xs ${
+                              draggable={!isCompleted}
+                              onDragStart={(e) => handleDragStartSession(e, session.id)}
+                              className={`p-4 rounded-xl border text-sm transition-all shadow-2xs relative ${
                                 isCompleted
                                   ? 'bg-slate-50 border-slate-200/80 text-slate-500'
                                   : isAssessment
-                                  ? 'bg-amber-50/60 border-amber-200 hover:border-amber-300'
-                                  : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-xs'
+                                  ? 'bg-amber-50/60 border-amber-200 hover:border-amber-300 cursor-grab active:cursor-grabbing'
+                                  : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-xs cursor-grab active:cursor-grabbing'
                               }`}
                             >
-                              {/* Header Meta: Course Tag, Type Badge, Duration */}
+                              {/* Header Meta: Course Tag, Type Badge, Duration, Quick Time Selector */}
                               <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
                                 <div className="flex items-center gap-2 flex-wrap">
+                                  {!isCompleted && (
+                                    <span title="Drag to move time slot" className="text-slate-400 hover:text-slate-600 cursor-grab">
+                                      <GripVertical className="w-4 h-4" />
+                                    </span>
+                                  )}
+
                                   {/* Course Tag */}
                                   <span
                                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold text-white shadow-2xs"
@@ -599,11 +650,27 @@ export function Planner({
                                   )}
                                 </div>
 
-                                {/* Duration & Exact Time Slot */}
+                                {/* Duration & Exact Interactive Time Slot adjustment */}
                                 <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-600 bg-slate-100/80 px-2.5 py-1 rounded-lg">
                                   <Clock className="w-3.5 h-3.5 text-indigo-600" />
                                   <span>{formatDuration(session.durationMinutes)}</span>
-                                  <span className="text-slate-400">({session.timeSlot})</span>
+
+                                  {/* Interactive Time Selector Dropdown */}
+                                  <select
+                                    value={session.timeSlot || `${hour < 10 ? '0' + hour : hour}:00`}
+                                    onChange={(e) => onUpdateSessionTimeSlot?.(session.id, e.target.value)}
+                                    className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-mono text-slate-800 font-bold hover:border-indigo-400 cursor-pointer"
+                                    title="Quick adjust session start time"
+                                  >
+                                    {TIMELINE_HOURS.map((h) => {
+                                      const slotStr = `${h < 10 ? '0' + h : h}:00`;
+                                      return (
+                                        <option key={h} value={slotStr}>
+                                          {formatHourLabel(h)}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
                                 </div>
                               </div>
 
@@ -627,18 +694,31 @@ export function Planner({
 
                               {/* Interactive Actions */}
                               <div className="flex flex-wrap items-center justify-between gap-3 pt-3 mt-3 border-t border-slate-100">
-                                <button
-                                  type="button"
-                                  onClick={() => onToggleSessionComplete(session.id)}
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                    isCompleted
-                                      ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                      : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
-                                  }`}
-                                >
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                                  <span>{isCompleted ? 'Completed ✓' : 'Mark Task Complete'}</span>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => onToggleSessionComplete(session.id)}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                      isCompleted
+                                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                        : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
+                                    }`}
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                    <span>{isCompleted ? 'Completed ✓' : 'Mark Task Complete'}</span>
+                                  </button>
+
+                                  {!isCompleted && onStartTask && task && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onStartTask(task)}
+                                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold transition-all cursor-pointer shadow-xs"
+                                    >
+                                      <Play className="w-3.5 h-3.5 fill-current" />
+                                      <span>Start Focus Session</span>
+                                    </button>
+                                  )}
+                                </div>
 
                                 {isAssessment && onCheckAssessment && task && (
                                   <button
@@ -657,7 +737,7 @@ export function Planner({
                       ) : (
                         <div className="h-full flex items-center py-1.5 text-xs text-slate-400 italic gap-2">
                           <span className="w-2 h-2 rounded-full bg-slate-200" />
-                          <span>Open focus study slot</span>
+                          <span>Open focus study slot — Drag task here to schedule</span>
                         </div>
                       )}
                     </div>
