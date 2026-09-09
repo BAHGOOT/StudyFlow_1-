@@ -76,7 +76,6 @@ export function saveLocalUserState(userId: string, update: Partial<UserDataState
  */
 export const ADMIN_EMAILS = [
   'mohamedelkoramy97@gmail.com',
-  'mohamedelkoramy2@gmail.com',
 ];
 
 export const isAdminEmail = (email?: string): boolean => {
@@ -93,12 +92,6 @@ export async function initializeUserAccount(
   university?: string,
   isDemo = false
 ): Promise<void> {
-  const isTargetClean = email.toLowerCase() === 'mohamedelkoramy2@gmail.com';
-  if (isTargetClean) {
-    localStorage.removeItem(getLocalUserStorageKey(userId));
-    isDemo = false;
-  }
-
   const isAdmin = isAdminEmail(email);
 
   const customProfile: StudentProfile = {
@@ -110,13 +103,13 @@ export async function initializeUserAccount(
     role: isAdmin ? 'admin' : 'student',
   };
 
-  const initialCourses = isDemo && !isTargetClean ? INITIAL_COURSES : [];
-  const initialTasks = isDemo && !isTargetClean ? INITIAL_TASKS : [];
-  const initialTrees = isDemo && !isTargetClean ? INITIAL_PLANTED_TREES : [];
-  const initialLectures = isDemo && !isTargetClean ? INITIAL_COLLEGE_LECTURES : [];
-  const initialTodayPlan = isDemo && !isTargetClean ? INITIAL_TODAY_PLAN : [];
-  const initialWeeklyPlan = isDemo && !isTargetClean ? INITIAL_WEEKLY_PLAN : [];
-  const initialCoins = isDemo && !isTargetClean ? 100 : (isAdmin ? 500 : 0);
+  const initialCourses = isDemo ? INITIAL_COURSES : [];
+  const initialTasks = isDemo ? INITIAL_TASKS : [];
+  const initialTrees = isDemo ? INITIAL_PLANTED_TREES : [];
+  const initialLectures = isDemo ? INITIAL_COLLEGE_LECTURES : [];
+  const initialTodayPlan = isDemo ? INITIAL_TODAY_PLAN : [];
+  const initialWeeklyPlan = isDemo ? INITIAL_WEEKLY_PLAN : [];
+  const initialCoins = isDemo ? 100 : (isAdmin ? 500 : 0);
 
   // Initialize local cache if not already set
   const localExisting = getLocalUserState(userId);
