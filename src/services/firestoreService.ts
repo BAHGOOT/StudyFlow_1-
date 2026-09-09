@@ -48,8 +48,6 @@ export interface UserDataState {
   unlockedSpecies: TreeSpecies[];
 }
 
-const getLocalUserStorageKey = (userId: string) => `studyflow_userdata_${userId}`;
-
 /**
  * Recursively remove `undefined` values and sanitize payloads so Firestore setDoc/updateDoc never fails
  */
@@ -70,25 +68,6 @@ export function cleanForFirestore<T>(obj: T): T {
     return cleaned as unknown as T;
   }
   return obj;
-}
-
-export function getLocalUserState(userId: string): Partial<UserDataState> | null {
-  try {
-    const raw = localStorage.getItem(getLocalUserStorageKey(userId));
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveLocalUserState(userId: string, update: Partial<UserDataState>) {
-  try {
-    const current = getLocalUserState(userId) || {};
-    const merged = { ...current, ...update };
-    localStorage.setItem(getLocalUserStorageKey(userId), JSON.stringify(merged));
-  } catch (err) {
-    console.warn('LocalStorage save error:', err);
-  }
 }
 
 /**
@@ -133,39 +112,12 @@ export async function initializeUserAccount(
   const initialWeeklyPlan = isDemo ? INITIAL_WEEKLY_PLAN : [];
   const initialCoins = isDemo ? 100 : (isAdmin ? 500 : 0);
 
-  // Attempt to initialize in Firestore
+  // Initialize in Firestore directly
   try {
     const userDocRef = doc(db, 'users', userId);
     const userDocSnap = await getDoc(userDocRef);
 
-    if (userDocSnap.exists()) {
-      // User already exists in Firestore -> Cache existing profile/plan in local storage
-      const d = userDocSnap.data();
-      saveLocalUserState(userId, {
-        profile: d.profile || customProfile,
-        availability: d.availability || INITIAL_AVAILABILITY,
-        commute: d.commute || INITIAL_COLLEGE_COMMUTE,
-        coins: d.coins ?? 0,
-        unlockedSpecies: d.unlockedSpecies || DEFAULT_UNLOCKED_SPECIES,
-        todayPlan: d.todayPlan || [],
-        weeklyPlan: d.weeklyPlan || [],
-      });
-    } else {
-      // Initialize local cache for new user
-      saveLocalUserState(userId, {
-        profile: customProfile,
-        courses: initialCourses,
-        tasks: initialTasks,
-        todayPlan: initialTodayPlan,
-        weeklyPlan: initialWeeklyPlan,
-        availability: INITIAL_AVAILABILITY,
-        plantedTrees: initialTrees,
-        lectures: initialLectures,
-        commute: INITIAL_COLLEGE_COMMUTE,
-        coins: initialCoins,
-        unlockedSpecies: DEFAULT_UNLOCKED_SPECIES,
-      });
-
+    if (!userDocSnap.exists()) {
       await setDoc(userDocRef, cleanForFirestore({
         email,
         displayName: customProfile.name,
@@ -198,7 +150,7 @@ export async function initializeUserAccount(
       }
     }
   } catch (err) {
-    console.warn('Firestore user init notification:', err);
+    console.warn('Firestore user init error:', err);
   }
 }
 
@@ -216,8 +168,6 @@ export async function clearAllUserData(userId: string): Promise<void> {
     coins: 0,
     unlockedSpecies: DEFAULT_UNLOCKED_SPECIES,
   };
-
-  saveLocalUserState(userId, emptyState);
 
   try {
     const userDocRef = doc(db, 'users', userId);
@@ -255,8 +205,6 @@ export async function populateSampleData(userId: string): Promise<void> {
     unlockedSpecies: DEFAULT_UNLOCKED_SPECIES,
   };
 
-  saveLocalUserState(userId, sampleState);
-
   try {
     const userDocRef = doc(db, 'users', userId);
     await setDoc(userDocRef, cleanForFirestore({
@@ -282,22 +230,16 @@ export async function populateSampleData(userId: string): Promise<void> {
 }
 
 /**
- * Subscribe to all user data in Firestore with local storage backup
+ * Subscribe to all user data in Firestore via onSnapshot real-time listeners
  */
 export function subscribeToUserData(
   userId: string,
   onData: (data: Partial<UserDataState>) => void,
   onError?: (error: Error) => void
 ) {
-  // Emit initial local state immediately if available
-  const cached = getLocalUserState(userId);
-  if (cached) {
-    onData(cached);
-  }
-
   const userDocRef = doc(db, 'users', userId);
 
-  // 1. Listen to user document
+  // 1. Listen to user document (profile, availability, commute, coins, unlockedSpecies, todayPlan, weeklyPlan)
   const unsubUser = onSnapshot(
     userDocRef,
     (snapshot) => {
@@ -312,7 +254,6 @@ export function subscribeToUserData(
         if (d.todayPlan !== undefined) update.todayPlan = d.todayPlan;
         if (d.weeklyPlan !== undefined) update.weeklyPlan = d.weeklyPlan;
 
-        saveLocalUserState(userId, update);
         onData(update);
       }
     },
@@ -328,7 +269,6 @@ export function subscribeToUserData(
     coursesColl,
     (snapshot) => {
       const courses = snapshot.docs.map((d) => d.data() as Course);
-      saveLocalUserState(userId, { courses });
       onData({ courses });
     },
     (err) => {
@@ -342,7 +282,6 @@ export function subscribeToUserData(
     tasksColl,
     (snapshot) => {
       const tasks = snapshot.docs.map((d) => d.data() as Task);
-      saveLocalUserState(userId, { tasks });
       onData({ tasks });
     },
     (err) => {
@@ -357,7 +296,6 @@ export function subscribeToUserData(
     (snapshot) => {
       const plantedTrees = snapshot.docs.map((d) => d.data() as PlantedTree);
       plantedTrees.sort((a, b) => new Date(b.plantedAt).getTime() - new Date(a.plantedAt).getTime());
-      saveLocalUserState(userId, { plantedTrees });
       onData({ plantedTrees });
     },
     (err) => {
@@ -371,7 +309,6 @@ export function subscribeToUserData(
     lecturesColl,
     (snapshot) => {
       const lectures = snapshot.docs.map((d) => d.data() as CollegeLecture);
-      saveLocalUserState(userId, { lectures });
       onData({ lectures });
     },
     (err) => {
@@ -390,7 +327,6 @@ export function subscribeToUserData(
 
 // User Profile / Settings updates
 export async function updateUserProfileDoc(userId: string, data: Partial<UserDataState>): Promise<void> {
-  saveLocalUserState(userId, data);
   try {
     const userDocRef = doc(db, 'users', userId);
     const sanitized = cleanForFirestore({
@@ -405,10 +341,6 @@ export async function updateUserProfileDoc(userId: string, data: Partial<UserDat
 
 // Course CRUD
 export async function saveCourseToDb(userId: string, course: Course): Promise<void> {
-  const current = getLocalUserState(userId)?.courses || [];
-  const updated = [...current.filter((c) => c.id !== course.id), course];
-  saveLocalUserState(userId, { courses: updated });
-
   try {
     const courseDoc = doc(db, 'users', userId, 'courses', course.id);
     const sanitized = cleanForFirestore(course);
@@ -419,7 +351,6 @@ export async function saveCourseToDb(userId: string, course: Course): Promise<vo
 }
 
 export async function saveCoursesToDb(userId: string, courses: Course[]): Promise<void> {
-  saveLocalUserState(userId, { courses });
   try {
     for (const course of courses) {
       const courseDoc = doc(db, 'users', userId, 'courses', course.id);
@@ -431,10 +362,6 @@ export async function saveCoursesToDb(userId: string, courses: Course[]): Promis
 }
 
 export async function deleteCourseFromDb(userId: string, courseId: string): Promise<void> {
-  const current = getLocalUserState(userId)?.courses || [];
-  const updated = current.filter((c) => c.id !== courseId);
-  saveLocalUserState(userId, { courses: updated });
-
   try {
     const courseDoc = doc(db, 'users', userId, 'courses', courseId);
     await deleteDoc(courseDoc);
@@ -445,10 +372,6 @@ export async function deleteCourseFromDb(userId: string, courseId: string): Prom
 
 // Task CRUD
 export async function saveTaskToDb(userId: string, task: Task): Promise<void> {
-  const current = getLocalUserState(userId)?.tasks || [];
-  const updated = [...current.filter((t) => t.id !== task.id), task];
-  saveLocalUserState(userId, { tasks: updated });
-
   try {
     const taskDoc = doc(db, 'users', userId, 'tasks', task.id);
     const sanitized = cleanForFirestore(task);
@@ -459,10 +382,6 @@ export async function saveTaskToDb(userId: string, task: Task): Promise<void> {
 }
 
 export async function deleteTaskFromDb(userId: string, taskId: string): Promise<void> {
-  const current = getLocalUserState(userId)?.tasks || [];
-  const updated = current.filter((t) => t.id !== taskId);
-  saveLocalUserState(userId, { tasks: updated });
-
   try {
     const taskDoc = doc(db, 'users', userId, 'tasks', taskId);
     await deleteDoc(taskDoc);
@@ -473,10 +392,6 @@ export async function deleteTaskFromDb(userId: string, taskId: string): Promise<
 
 // Planted Tree CRUD
 export async function savePlantedTreeToDb(userId: string, tree: PlantedTree): Promise<void> {
-  const current = getLocalUserState(userId)?.plantedTrees || [];
-  const updated = [tree, ...current.filter((t) => t.id !== tree.id)];
-  saveLocalUserState(userId, { plantedTrees: updated });
-
   try {
     const treeDoc = doc(db, 'users', userId, 'plantedTrees', tree.id);
     await setDoc(treeDoc, cleanForFirestore(tree), { merge: true });
@@ -487,7 +402,6 @@ export async function savePlantedTreeToDb(userId: string, tree: PlantedTree): Pr
 
 // College Lectures CRUD
 export async function saveLecturesToDb(userId: string, lectures: CollegeLecture[]): Promise<void> {
-  saveLocalUserState(userId, { lectures });
   try {
     const lecturesColl = collection(db, 'users', userId, 'lectures');
     const existingSnaps = await getDocs(lecturesColl);
@@ -507,10 +421,6 @@ export async function saveLecturesToDb(userId: string, lectures: CollegeLecture[
 }
 
 export async function deleteLectureFromDb(userId: string, lectureId: string): Promise<void> {
-  const current = getLocalUserState(userId)?.lectures || [];
-  const updated = current.filter((l) => l.id !== lectureId);
-  saveLocalUserState(userId, { lectures: updated });
-
   try {
     const lectureDoc = doc(db, 'users', userId, 'lectures', lectureId);
     await deleteDoc(lectureDoc);
@@ -520,7 +430,7 @@ export async function deleteLectureFromDb(userId: string, lectureId: string): Pr
 }
 
 /**
- * Save Scanned Timetable Data (Lectures, Courses, Tasks, Availability, Plans) in batch
+ * Save Scanned Timetable Data (Lectures, Courses, Tasks, Availability, Plans) in batch directly to Firestore
  */
 export async function saveBatchScannedWorkspaceData(
   userId: string,
@@ -533,26 +443,6 @@ export async function saveBatchScannedWorkspaceData(
     availability: StudyAvailability;
   }
 ): Promise<void> {
-  const current = getLocalUserState(userId) || {};
-  const existingCourses = current.courses || [];
-  const mergedCourses = [...existingCourses];
-  for (const c of data.courses) {
-    if (!mergedCourses.some((existing) => existing.id === c.id || existing.name.toLowerCase() === c.name.toLowerCase())) {
-      mergedCourses.push(c);
-    }
-  }
-
-  const mergedTasks = [...(current.tasks || []), ...data.tasks];
-
-  saveLocalUserState(userId, {
-    courses: mergedCourses,
-    tasks: mergedTasks,
-    lectures: data.lectures,
-    todayPlan: data.todayPlan,
-    weeklyPlan: data.weeklyPlan,
-    availability: data.availability,
-  });
-
   try {
     const userDocRef = doc(db, 'users', userId);
     await setDoc(userDocRef, cleanForFirestore({
