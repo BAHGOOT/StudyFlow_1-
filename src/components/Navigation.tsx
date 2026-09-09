@@ -76,7 +76,7 @@ export function Navigation({
               className="flex items-center gap-3 text-left focus:outline-none group"
             >
               <img
-                src="/src/assets/images/studyflow_app_icon_1788959981358.jpg"
+                src="/logo.png"
                 alt="StudyFlow App Icon"
                 referrerPolicy="no-referrer"
                 className="w-10 h-10 rounded-xl object-cover shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200 border border-slate-100"
@@ -222,7 +222,7 @@ export function Navigation({
           className="flex items-center gap-2"
         >
           <img
-            src="/src/assets/images/studyflow_app_icon_1788959981358.jpg"
+            src="/logo.png"
             alt="StudyFlow App Icon"
             referrerPolicy="no-referrer"
             className="w-8 h-8 rounded-lg object-cover shadow-xs border border-slate-100"

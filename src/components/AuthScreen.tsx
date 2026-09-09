@@ -117,7 +117,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = () => {
         {/* Brand Badge */}
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl shadow-lg shadow-indigo-600/20 mb-4 ring-4 ring-indigo-100 overflow-hidden bg-white">
           <img
-            src="/src/assets/images/studyflow_app_icon_1788959981358.jpg"
+            src="/logo.png"
             alt="StudyFlow App Icon"
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover"

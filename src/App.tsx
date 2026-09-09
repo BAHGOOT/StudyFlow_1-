@@ -75,7 +75,7 @@ function AppContent() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div className="w-16 h-16 rounded-2xl shadow-xl shadow-indigo-600/20 mb-4 animate-bounce overflow-hidden bg-white ring-4 ring-indigo-100">
           <img
-            src="/src/assets/images/studyflow_app_icon_1788959981358.jpg"
+            src="/logo.png"
             alt="StudyFlow"
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover"

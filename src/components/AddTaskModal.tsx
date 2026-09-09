@@ -12,12 +12,20 @@ interface AddTaskModalProps {
 
 const TASK_TYPES: TaskType[] = ['Assignment', 'Quiz', 'Exam', 'Project', 'Study', 'Other'];
 
+function getDefaultTomorrowDeadline(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T23:59`;
+}
+
 export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskModalProps) {
   const [name, setName] = useState('');
   const [courseId, setCourseId] = useState(courses[0]?.id || '');
   const [type, setType] = useState<TaskType>('Assignment');
-  // Default deadline: tomorrow at 23:59
-  const [deadline, setDeadline] = useState('2026-09-09T23:59');
+  const [deadline, setDeadline] = useState(getDefaultTomorrowDeadline);
   const [estimatedMinutes, setEstimatedMinutes] = useState(45);
   const [importance, setImportance] = useState(4);
   const [difficulty, setDifficulty] = useState(3);
