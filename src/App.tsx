@@ -73,8 +73,13 @@ function AppContent() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-xl shadow-indigo-600/20 mb-4 animate-bounce">
-          <GraduationCap className="w-8 h-8" />
+        <div className="w-16 h-16 rounded-2xl shadow-xl shadow-indigo-600/20 mb-4 animate-bounce overflow-hidden bg-white ring-4 ring-indigo-100">
+          <img
+            src="/src/assets/images/studyflow_app_icon_1788959981358.jpg"
+            alt="StudyFlow"
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover"
+          />
         </div>
         <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
           <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />

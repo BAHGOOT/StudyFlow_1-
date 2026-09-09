@@ -115,8 +115,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 selection:bg-indigo-500/15">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center px-4">
         {/* Brand Badge */}
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 mb-4 ring-4 ring-indigo-100">
-          <GraduationCap className="w-8 h-8" />
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl shadow-lg shadow-indigo-600/20 mb-4 ring-4 ring-indigo-100 overflow-hidden bg-white">
+          <img
+            src="/src/assets/images/studyflow_app_icon_1788959981358.jpg"
+            alt="StudyFlow App Icon"
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover"
+          />
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
           StudyFlow

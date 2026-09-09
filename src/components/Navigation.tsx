@@ -75,9 +75,12 @@ export function Navigation({
               onClick={() => onNavigate('dashboard')}
               className="flex items-center gap-3 text-left focus:outline-none group"
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200">
-                <Sparkles className="w-5 h-5 text-indigo-100" />
-              </div>
+              <img
+                src="/src/assets/images/studyflow_app_icon_1788959981358.jpg"
+                alt="StudyFlow App Icon"
+                referrerPolicy="no-referrer"
+                className="w-10 h-10 rounded-xl object-cover shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200 border border-slate-100"
+              />
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-display font-bold text-xl tracking-tight text-slate-900">
@@ -218,9 +221,12 @@ export function Navigation({
           onClick={() => onNavigate('dashboard')}
           className="flex items-center gap-2"
         >
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-            <Sparkles className="w-4 h-4" />
-          </div>
+          <img
+            src="/src/assets/images/studyflow_app_icon_1788959981358.jpg"
+            alt="StudyFlow App Icon"
+            referrerPolicy="no-referrer"
+            className="w-8 h-8 rounded-lg object-cover shadow-xs border border-slate-100"
+          />
           <span className="font-display font-bold text-lg text-slate-900">
             Study<span className="text-indigo-600">Flow</span>
           </span>
