@@ -26,7 +26,7 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
   const [courseId, setCourseId] = useState(courses[0]?.id || '');
   const [type, setType] = useState<TaskType>('Assignment');
   const [deadline, setDeadline] = useState(getDefaultTomorrowDeadline);
-  const [estimatedMinutes, setEstimatedMinutes] = useState(45);
+  const [estimatedMinutes, setEstimatedMinutes] = useState<string | number>(45);
   const [importance, setImportance] = useState(4);
   const [difficulty, setDifficulty] = useState(3);
   const [notes, setNotes] = useState('');
@@ -43,7 +43,7 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
       courseId: courseId || courses[0]?.id,
       type,
       deadline,
-      estimatedMinutes,
+      estimatedMinutes: Number(estimatedMinutes) || 45,
       importance,
       difficulty,
     },
@@ -200,18 +200,47 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
                 Estimated Time (minutes)
               </label>
               <div className="flex items-center gap-2">
-                <input
-                  id="task-duration-input"
-                  type="number"
-                  min="5"
-                  step="5"
-                  max="480"
-                  value={estimatedMinutes}
-                  onChange={(e) => setEstimatedMinutes(Math.max(5, parseInt(e.target.value) || 30))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
-                />
-                <span className="text-xs text-slate-500 whitespace-nowrap">
-                  ({Math.round((estimatedMinutes / 60) * 10) / 10}h)
+                <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-600 transition-all w-full">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parsed = parseInt(String(estimatedMinutes), 10);
+                      const curr = isNaN(parsed) ? 45 : parsed;
+                      setEstimatedMinutes(Math.max(5, curr - 15));
+                    }}
+                    className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-extrabold text-xs transition-colors border-r border-slate-200 select-none cursor-pointer"
+                    title="Decrease time by 15m"
+                  >
+                    -15m
+                  </button>
+
+                  <input
+                    id="task-duration-input"
+                    type="number"
+                    min="5"
+                    step="5"
+                    max="480"
+                    value={estimatedMinutes}
+                    onChange={(e) => setEstimatedMinutes(e.target.value)}
+                    className="w-full text-center py-2 bg-white text-sm font-bold text-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="45"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parsed = parseInt(String(estimatedMinutes), 10);
+                      const curr = isNaN(parsed) ? 45 : parsed;
+                      setEstimatedMinutes(Math.min(480, curr + 15));
+                    }}
+                    className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-extrabold text-xs transition-colors border-l border-slate-200 select-none cursor-pointer"
+                    title="Increase time by 15m"
+                  >
+                    +15m
+                  </button>
+                </div>
+                <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">
+                  ({Math.round(((parseInt(String(estimatedMinutes)) || 45) / 60) * 10) / 10}h)
                 </span>
               </div>
             </div>

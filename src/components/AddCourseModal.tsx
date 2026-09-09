@@ -23,7 +23,7 @@ export function AddCourseModal({ isOpen, onClose, onAddCourse }: AddCourseModalP
   const [code, setCode] = useState('');
   const [professor, setProfessor] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
-  const [credits, setCredits] = useState(3);
+  const [credits, setCredits] = useState<string | number>('3');
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
@@ -35,6 +35,9 @@ export function AddCourseModal({ isOpen, onClose, onAddCourse }: AddCourseModalP
       return;
     }
 
+    const parsedCredits = parseInt(String(credits), 10);
+    const finalCredits = isNaN(parsedCredits) ? 3 : Math.max(1, Math.min(12, parsedCredits));
+
     const newCourse: Course = {
       id: `course-${Date.now()}`,
       name: name.trim(),
@@ -42,7 +45,7 @@ export function AddCourseModal({ isOpen, onClose, onAddCourse }: AddCourseModalP
       professor: professor.trim() || undefined,
       color: selectedColor.color,
       accentHex: selectedColor.hex,
-      credits: Number(credits) || 3,
+      credits: finalCredits,
     };
 
     onAddCourse(newCourse);
@@ -109,14 +112,43 @@ export function AddCourseModal({ isOpen, onClose, onAddCourse }: AddCourseModalP
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
                 Credits
               </label>
-              <input
-                type="number"
-                min="1"
-                max="8"
-                value={credits}
-                onChange={(e) => setCredits(parseInt(e.target.value) || 3)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
-              />
+              <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-600 transition-all">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const parsed = parseInt(String(credits), 10);
+                    const curr = isNaN(parsed) ? 3 : parsed;
+                    setCredits(Math.max(1, curr - 1));
+                  }}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-extrabold text-base transition-colors border-r border-slate-200 select-none cursor-pointer flex items-center justify-center min-w-[38px]"
+                  title="Decrease credits"
+                >
+                  −
+                </button>
+
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={credits}
+                  onChange={(e) => setCredits(e.target.value)}
+                  className="w-full text-center py-2 bg-white text-sm font-bold text-slate-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  placeholder="3"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const parsed = parseInt(String(credits), 10);
+                    const curr = isNaN(parsed) ? 3 : parsed;
+                    setCredits(Math.min(12, curr + 1));
+                  }}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-extrabold text-base transition-colors border-l border-slate-200 select-none cursor-pointer flex items-center justify-center min-w-[38px]"
+                  title="Increase credits"
+                >
+                  +
+                </button>
+              </div>
             </div>
           </div>
 

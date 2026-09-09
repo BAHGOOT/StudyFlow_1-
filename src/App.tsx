@@ -233,10 +233,10 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
     }
   };
 
-  // Toggle Task Complete (Award 5 coins per 60 min)
+  // Toggle Task Complete (Award 5 coins per 60 min & dynamically rebalance uncompleted tasks)
   const handleToggleTaskComplete = (taskId: string) => {
     let updatedTask: Task | null = null;
-    let earnedCoinsTotal = 0;
+    let nextTasks: Task[] = [];
 
     setTasks((prevTasks) => {
       const target = prevTasks.find((t) => t.id === taskId);
@@ -246,7 +246,6 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
       if (isMarkingComplete) {
         const estMinutes = target.estimatedMinutes || 60;
         const earnedCoins = Math.max(1, Math.round((estMinutes / 60) * 5));
-        earnedCoinsTotal = earnedCoins;
         setCoins((prevCoins) => {
           const nextCoins = prevCoins + earnedCoins;
           updateUserProfileDoc(currentUser.uid, { coins: nextCoins });
@@ -255,7 +254,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
         showToast(`🎉 Completed "${target.name}"! +${earnedCoins} Study Coins earned (${estMinutes}m study) 🪙`);
       }
 
-      return prevTasks.map((t) => {
+      nextTasks = prevTasks.map((t) => {
         if (t.id === taskId) {
           const nextStatus = t.status === 'completed' ? 'todo' : 'completed';
           updatedTask = {
@@ -267,27 +266,31 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
         }
         return t;
       });
+
+      return nextTasks;
     });
 
     if (updatedTask) {
       saveTaskToDb(currentUser.uid, updatedTask);
     }
 
-    // Sync with today's plan
-    setTodayPlan((prevPlan) => {
-      const updated = prevPlan.map((item) => (item.taskId === taskId ? { ...item, completed: !item.completed } : item));
-      updateUserProfileDoc(currentUser.uid, { todayPlan: updated });
-      return updated;
-    });
+    // Dynamic auto-rebalancing: redistribute remaining uncompleted tasks across available study windows
+    if (nextTasks.length > 0) {
+      const rebalanceResult = generateSmartStudyPlanFromLecturesAndCourses({
+        existingCourses: courses,
+        existingTasks: nextTasks,
+        lectures,
+        commute,
+        suggestedDailyHours: availability.dailyHours,
+      });
 
-    // Sync with weekly plan
-    setWeeklyPlan((prevWeekly) => {
-      const updated = prevWeekly.map((session) =>
-        session.taskId === taskId ? { ...session, completed: !session.completed } : session
-      );
-      updateUserProfileDoc(currentUser.uid, { weeklyPlan: updated });
-      return updated;
-    });
+      setWeeklyPlan(rebalanceResult.weeklyPlan);
+      setTodayPlan(rebalanceResult.todayPlan);
+      updateUserProfileDoc(currentUser.uid, {
+        weeklyPlan: rebalanceResult.weeklyPlan,
+        todayPlan: rebalanceResult.todayPlan,
+      });
+    }
   };
 
   // Toggle plan item complete
@@ -729,8 +732,25 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
             userEmail={currentUser.email || undefined}
             onUpdateAvailability={(newAvail) => {
               setAvailability(newAvail);
-              updateUserProfileDoc(currentUser.uid, { availability: newAvail });
-              showToast('Updated study availability schedule!');
+
+              // Dynamically re-calculate and redistribute uncompleted tasks across newly configured daily study capacity windows
+              const rebalanceResult = generateSmartStudyPlanFromLecturesAndCourses({
+                existingCourses: courses,
+                existingTasks: tasks,
+                lectures,
+                commute,
+                suggestedDailyHours: newAvail.dailyHours,
+              });
+
+              setWeeklyPlan(rebalanceResult.weeklyPlan);
+              setTodayPlan(rebalanceResult.todayPlan);
+
+              updateUserProfileDoc(currentUser.uid, {
+                availability: newAvail,
+                weeklyPlan: rebalanceResult.weeklyPlan,
+                todayPlan: rebalanceResult.todayPlan,
+              });
+              showToast('Updated study capacity & redistributed weekly schedule!');
             }}
             onUpdateProfile={(newProf) => {
               setProfile(newProf);

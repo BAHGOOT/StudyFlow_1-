@@ -9,8 +9,8 @@ import {
 } from '../types';
 
 /**
- * Calculates a 0-100 Smart Priority Score based on deadline, importance, difficulty, duration, and course credits.
- * Higher credit subjects and high-importance tasks receive a proportional score boost.
+ * Calculates a 0-100 Smart Priority Score based on urgency (deadline proximity), difficulty level, course credit hours, and task importance.
+ * Higher credit subjects, urgent deadlines, and high-difficulty tasks receive proportional score boosts.
  */
 export function calculateSmartPriority(
   task: Partial<Task>,
@@ -27,21 +27,24 @@ export function calculateSmartPriority(
   let deadlineScore = 15;
   let reason = 'Balanced progress towards upcoming semester milestones.';
 
-  if (diffHours <= 24) {
-    deadlineScore = 48;
-    reason = `Your deadline is close and you still have ${Math.round((task.estimatedMinutes || 45) / 60 * 10) / 10}h remaining.`;
+  if (diffHours <= 12) {
+    deadlineScore = 50;
+    reason = `Urgent deadline in ${Math.round(diffHours)}h! Immediate focus required.`;
+  } else if (diffHours <= 24) {
+    deadlineScore = 42;
+    reason = `Due in ${Math.round(diffHours)}h. High urgency priority window.`;
   } else if (diffHours <= 48) {
-    deadlineScore = 38;
-    reason = `Due in 2 days — high priority to avoid last-minute rush.`;
+    deadlineScore = 34;
+    reason = `Due in 2 days — high priority to avoid last-minute workload rush.`;
   } else if (diffHours <= 96) {
-    deadlineScore = 28;
+    deadlineScore = 26;
     reason = `Due in ${Math.ceil(diffHours / 24)} days. Early preparation prevents backlog accumulation.`;
   } else if (diffHours <= 168) {
     deadlineScore = 18;
     reason = `Scheduled within this week to distribute cognitive workload evenly.`;
   } else {
-    deadlineScore = 8;
-    reason = `Longer-term milestone scheduled based on course difficulty.`;
+    deadlineScore = 10;
+    reason = `Longer-term milestone scheduled based on course credit weight and difficulty.`;
   }
 
   if (task.type === 'Exam' || task.type === 'Quiz') {
@@ -50,16 +53,42 @@ export function calculateSmartPriority(
     reason = `Multi-stage project requiring focused development blocks this week.`;
   }
 
-  // Factor in course credit hours: higher credit subjects demand deeper priority
+  // Factor in course credit hours: higher credit subjects demand deeper priority (up to 18 points)
   const credits = course?.credits || 3;
-  const creditWeight = Math.min(10, Math.round((credits / 3) * 5));
+  const creditWeight = Math.min(18, Math.round((credits / 3) * 9));
 
-  // Formula: deadlineScore (up to 48) + importance (up to 28) + difficulty (up to 16) + creditWeight (up to 10)
-  const importanceScore = (importance / 5) * 26;
+  // Importance score: 1-5 scale -> up to 20 points
+  const importanceScore = (importance / 5) * 20;
+
+  // Difficulty score: 1-5 scale -> up to 16 points
   const difficultyScore = (difficulty / 5) * 16;
-  const rawScore = Math.min(99, Math.round(deadlineScore + importanceScore + difficultyScore + creditWeight));
+
+  // Evaluation Type Bonus (+10 for Quizzes & Exams)
+  const typeBonus = (task.type === 'Exam' || task.type === 'Quiz') ? 10 : 0;
+
+  const rawScore = Math.min(99, Math.round(deadlineScore + importanceScore + difficultyScore + creditWeight + typeBonus));
 
   return { score: rawScore, reason };
+}
+
+/**
+ * Detects if a task or course represents a heavy analytical subject
+ * (e.g., Mathematics, Physics, Chemistry, Computer Science, Engineering, Statistics, Finance, high difficulty / credits)
+ */
+export function isHeavyAnalyticalTask(task: Task, course?: Course): boolean {
+  if (task.difficulty >= 4) return true;
+  if ((course?.credits || 0) >= 4) return true;
+  if (task.type === 'Exam' || task.type === 'Quiz') return true;
+
+  const textToCheck = `${course?.name || ''} ${course?.code || ''} ${task.name}`.toLowerCase();
+  const analyticalKeywords = [
+    'math', 'calculus', 'algebra', 'physics', 'chem', 'stat', 'computer', 'code',
+    'algo', 'data', 'finance', 'accounting', 'eng', 'micro', 'macro', 'logic',
+    'linear', 'prob', 'diff', 'discrete', 'mechanics', 'circuit', 'biochem',
+    'genetics', 'analyt', 'econom', 'numerical'
+  ];
+
+  return analyticalKeywords.some((kw) => textToCheck.includes(kw));
 }
 
 /**
@@ -420,6 +449,85 @@ export function determineOptimalRestDay(
 }
 
 /**
+ * Exam Auto-Decomposition:
+ * When an exam or major project is added, automatically split it into multi-stage study milestones:
+ * Stage 1: Concept Review -> Stage 2: Problem Solving & Application -> Stage 3: Past Exams & Final Practice
+ * spread over the days leading up to the deadline.
+ */
+export function decomposeExamTasksInPool(tasks: Task[], courses: Course[] = []): Task[] {
+  const resultTasks: Task[] = [];
+
+  tasks.forEach((task) => {
+    const isExamOrMajorProject =
+      task.type === 'Exam' ||
+      task.type === 'Quiz' ||
+      task.type === 'Project' ||
+      task.name.toLowerCase().includes('exam') ||
+      task.name.toLowerCase().includes('midterm') ||
+      task.name.toLowerCase().includes('final');
+
+    const alreadyDecomposed =
+      tasks.some((t) => t.id !== task.id && t.name.includes(task.name) && t.name.includes('Stage')) ||
+      task.name.includes('Stage 1:') ||
+      task.name.includes('Stage 2:') ||
+      task.name.includes('Stage 3:');
+
+    if (isExamOrMajorProject && !alreadyDecomposed && task.status !== 'completed') {
+      const deadlineDate = new Date(task.deadline || new Date().toISOString());
+      const course = courses.find((c) => c.id === task.courseId);
+
+      // Stage 1: Concept Review (3 days before deadline)
+      const date1 = new Date(deadlineDate.getTime() - 3 * 86400000);
+      const stage1: Task = {
+        ...task,
+        id: `${task.id}-stage-1`,
+        name: `${task.name} (Stage 1: Concept Review & Synthesis)`,
+        estimatedMinutes: 60,
+        type: 'Study',
+        deadline: date1.toISOString().slice(0, 16),
+        notes: `Stage 1 of Exam Prep: Synthesize core lecture notes and outline key formulas/theories for ${course?.name || 'course'}.`,
+        smartPriorityScore: Math.min(99, (task.smartPriorityScore || 80) + 5),
+        urgencyReason: `Phase 1 of 3-stage exam preparation milestone.`,
+      };
+
+      // Stage 2: Problem Solving & Active Recall (2 days before deadline)
+      const date2 = new Date(deadlineDate.getTime() - 2 * 86400000);
+      const stage2: Task = {
+        ...task,
+        id: `${task.id}-stage-2`,
+        name: `${task.name} (Stage 2: Practice Problems & Application)`,
+        estimatedMinutes: 60,
+        type: 'Study',
+        deadline: date2.toISOString().slice(0, 16),
+        notes: `Stage 2 of Exam Prep: Solve practice questions, active recall flashcards, and homework set reviews.`,
+        smartPriorityScore: Math.min(99, (task.smartPriorityScore || 80) + 8),
+        urgencyReason: `Phase 2 of 3-stage exam preparation milestone.`,
+      };
+
+      // Stage 3: Past Exams & Final Practice (1 day before deadline)
+      const date3 = new Date(deadlineDate.getTime() - 1 * 86400000);
+      const stage3: Task = {
+        ...task,
+        id: `${task.id}-stage-3`,
+        name: `${task.name} (Stage 3: Past Exams & Mock Review)`,
+        estimatedMinutes: 60,
+        type: task.type,
+        deadline: date3.toISOString().slice(0, 16),
+        notes: `Stage 3 of Exam Prep: Timed mock test, past exam paper review, and final high-yield topic check.`,
+        smartPriorityScore: Math.min(99, (task.smartPriorityScore || 80) + 10),
+        urgencyReason: `Final phase before exam/project deadline.`,
+      };
+
+      resultTasks.push(stage1, stage2, stage3);
+    } else {
+      resultTasks.push(task);
+    }
+  });
+
+  return resultTasks;
+}
+
+/**
  * Rebalances weekly study plan taking into account:
  * 1. College lecture hours and commute to/from campus (strictly avoids clashes)
  * 2. User's configured daily study availability
@@ -457,7 +565,7 @@ export function rebalanceWeeklyPlanWithSchedule(
     return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
   });
 
-  // Map each day's study budget and college commitments
+  // Map each day's study budget, college commitments, and analytical subject load
   const dayCapacities = DAYS_OF_WEEK_LIST.map((day) => {
     const isRest = day === restDay;
     const college = calculateCollegeDayCommitment(day, lectures, commute);
@@ -472,23 +580,25 @@ export function rebalanceWeeklyPlanWithSchedule(
       dayLectures: lectures.filter((l) => l.day === day),
       budgetMinutes: configuredMinutes,
       allocatedMinutes: 0,
+      heavyAnalyticalCount: 0, // Prevent scheduling >2 heavy analytical subjects per day
       sessions: [] as PlannedSession[],
     };
   });
 
-  // Distribute tasks respecting deadlines, credit weights, and the resting day
+  // Distribute tasks respecting deadlines, credit weights, heavy analytical subject caps, and rest day
   sortedTasks.forEach((task, taskIdx) => {
     const course = courses.find((c) => c.id === task.courseId);
     const credits = course?.credits || 3;
     const importance = task.importance || 3;
+    const isHeavy = isHeavyAnalyticalTask(task, course);
 
-    // Workload duration scales with credit hours and importance:
+    // Workload duration scales with credit hours, difficulty, and importance:
     // Core 4-5 credit courses or high importance tasks get 60m - 90m blocks;
     // lighter 1-2 credit subjects receive 30m - 45m blocks.
     let taskDuration = task.estimatedMinutes || 45;
-    if (credits >= 4 || importance >= 4) {
+    if (credits >= 4 || importance >= 4 || task.difficulty >= 4) {
       taskDuration = Math.min(90, Math.max(60, taskDuration));
-    } else if (credits <= 2 && importance <= 2) {
+    } else if (credits <= 2 && importance <= 2 && task.difficulty <= 2) {
       taskDuration = Math.min(45, Math.max(25, taskDuration));
     }
 
@@ -505,22 +615,31 @@ export function rebalanceWeeklyPlanWithSchedule(
     const pool = eligibleDays.length > 0 ? eligibleDays : nonRestDays;
     if (pool.length === 0) return;
 
-    let bestDayObj = pool[0];
+    // WORKLOAD BALANCING RULE: Prevent scheduling more than 2 heavy analytical subjects on the same day
+    let candidateDays = pool;
+    if (isHeavy) {
+      const nonOverloadedDays = pool.filter((d) => d.heavyAnalyticalCount < 2);
+      if (nonOverloadedDays.length > 0) {
+        candidateDays = nonOverloadedDays;
+      }
+    }
+
+    let bestDayObj = candidateDays[0];
 
     if (task.type === 'Exam' || task.type === 'Quiz') {
       // Prioritize days immediately leading up to the quiz/exam (day before or deadline day)
-      const targetDays = pool.filter((d) => {
+      const targetDays = candidateDays.filter((d) => {
         const idx = DAY_INDEX_MAP[d.day];
         return idx === deadlineDayIdx || idx === Math.max(0, deadlineDayIdx - 1);
       });
-      const candidates = targetDays.length > 0 ? targetDays : pool;
+      const candidates = targetDays.length > 0 ? targetDays : candidateDays;
       bestDayObj = candidates.reduce((best, curr) =>
         curr.allocatedMinutes < best.allocatedMinutes ? curr : best
       );
     } else {
       // For assignments & general tasks: pick day with lowest load ratio before deadline
       let minLoadRatio = 9999;
-      pool.forEach((dayObj) => {
+      candidateDays.forEach((dayObj) => {
         const totalCommitted = dayObj.allocatedMinutes + (dayObj.college.totalCollegeMinutes * 0.4);
         const ratio = totalCommitted / Math.max(60, dayObj.budgetMinutes);
         if (ratio < minLoadRatio) {
@@ -528,6 +647,11 @@ export function rebalanceWeeklyPlanWithSchedule(
           bestDayObj = dayObj;
         }
       });
+    }
+
+    // Track heavy analytical subject count for this day
+    if (isHeavy) {
+      bestDayObj.heavyAnalyticalCount += 1;
     }
 
     // Find non-conflicting time slot on the selected day
@@ -694,6 +818,9 @@ export function generateSmartStudyPlanFromLecturesAndCourses({
       }
     });
   }
+
+  // Decompose major exams/projects into multi-stage study milestones
+  allTasks = decomposeExamTasksInPool(allTasks, allCourses);
 
   // Recalculate smart priorities for all tasks with course credit awareness
   allTasks = allTasks.map((t) => {
