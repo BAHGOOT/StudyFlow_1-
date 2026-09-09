@@ -19,7 +19,7 @@ interface AuthScreenProps {
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = () => {
-  const { signIn, signUp } = useAuth();
+  const { signInWithGoogle, signIn, signUp } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,6 +28,29 @@ export const AuthScreen: React.FC<AuthScreenProps> = () => {
   const [university, setUniversity] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setIsGoogleSubmitting(true);
+    try {
+      await signInWithGoogle();
+    } catch (err: unknown) {
+      const errorObj = err as { code?: string; message?: string };
+      console.warn('Google sign-in error:', err);
+      if (errorObj.code === 'auth/popup-closed-by-user') {
+        setError('Sign-in popup was closed before completing.');
+      } else if (errorObj.code === 'auth/cancelled-popup-request') {
+        // Ignored
+      } else if (errorObj.code === 'auth/popup-blocked') {
+        setError('Google sign-in popup was blocked by browser. Please allow popups for this site.');
+      } else {
+        setError(errorObj.message || 'Google sign-in could not be completed. Please try again.');
+      }
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,6 +128,47 @@ export const AuthScreen: React.FC<AuthScreenProps> = () => {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
         <div className="bg-white py-8 px-6 sm:px-8 shadow-sm rounded-2xl border border-slate-200">
+          {/* Google Sign-In Primary Action */}
+          <button
+            type="button"
+            id="google-signin-button"
+            onClick={handleGoogleSignIn}
+            disabled={isGoogleSubmitting || isSubmitting}
+            className="w-full mb-6 flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-semibold text-sm shadow-xs transition-all hover:border-slate-400 disabled:opacity-60 cursor-pointer group"
+          >
+            {isGoogleSubmitting ? (
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+            ) : (
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.97 0 12s.45 3.84 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.93 6.72-4.93z"
+                />
+              </svg>
+            )}
+            <span>{isGoogleSubmitting ? 'Signing in with Google...' : 'Sign in with Google'}</span>
+          </button>
+
+          <div className="relative flex py-2 items-center mb-6">
+            <div className="flex-grow border-t border-slate-200"></div>
+            <span className="flex-shrink mx-4 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Or with email
+            </span>
+            <div className="flex-grow border-t border-slate-200"></div>
+          </div>
+
           {/* Tab Switcher */}
           <div className="flex p-1 bg-slate-100 rounded-xl mb-6">
             <button

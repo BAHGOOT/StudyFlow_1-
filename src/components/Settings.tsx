@@ -345,7 +345,7 @@ export function Settings({
                 <span>Firestore Cloud Integration</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed font-mono truncate">
-                Database: ai-studio-studyflow-15155819-8288-4902-b266-160fbe30f763
+                Project: studyflow-50ffd (Google Auth &amp; Firestore)
               </p>
               <div className="text-[11px] text-slate-400">
                 Full root &amp; subcollection read/write permissions authorized in <span className="font-mono text-slate-300">firestore.rules</span>.

@@ -2,11 +2,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, googleProvider } from '../lib/firebase';
 import { initializeUserAccount } from '../services/firestoreService';
 
 export interface AuthUser {
@@ -28,6 +29,7 @@ export interface StoredAccount {
 interface AuthContextType {
   currentUser: AuthUser | null;
   loading: boolean;
+  signInWithGoogle: () => Promise<void>;
   signIn: (email: string, pass: string, isDemo?: boolean) => Promise<void>;
   signUp: (email: string, pass: string, name: string, major?: string, university?: string, isDemo?: boolean) => Promise<void>;
   logout: () => Promise<void>;
@@ -122,6 +124,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearTimeout(timeout);
     };
   }, []);
+
+  const signInWithGoogle = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        const authUser: AuthUser = {
+          uid: result.user.uid,
+          email: result.user.email,
+          displayName: result.user.displayName || result.user.email?.split('@')[0] || 'Student',
+        };
+        setCurrentUser(authUser);
+        localStorage.setItem(LOCAL_STORAGE_ACTIVE_USER_KEY, JSON.stringify(authUser));
+        await initializeUserAccount(
+          result.user.uid,
+          result.user.email || '',
+          result.user.displayName || undefined,
+          undefined,
+          undefined,
+          false
+        );
+      }
+    } catch (popupErr: unknown) {
+      console.warn('Google sign-in popup error:', popupErr);
+      throw popupErr;
+    }
+  };
 
   const signIn = async (email: string, pass: string, isDemo = false) => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -241,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, signIn, signUp, logout }}>
+    <AuthContext.Provider value={{ currentUser, loading, signInWithGoogle, signIn, signUp, logout }}>
       {children}
     </AuthContext.Provider>
   );
