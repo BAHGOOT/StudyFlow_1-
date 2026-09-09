@@ -86,25 +86,31 @@ export function Forest({
   const activeWeeksList = semesterWeeks.filter((w) => (w.isPast || w.isCurrent) && w.hours > 0);
 
   // Day breakdown (Today's hours)
-  const todayTrees = plantedTrees.filter(
-    (t) => t.plantedAt.startsWith('2026-09-08') || t.dayOfWeek === 'Tuesday'
-  );
+  const todayDateStr = new Date().toISOString().slice(0, 10);
+  const currentWeekday = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  const todayTrees = plantedTrees.filter((t) => {
+    if (t.plantedAt.startsWith(todayDateStr)) return true;
+    const treeDay = t.dayOfWeek;
+    return treeDay === currentWeekday || treeDay === currentWeekday.slice(0, 3);
+  });
   const todayMinutes = todayTrees.reduce((acc, t) => acc + t.focusMinutes, 0);
 
   // Week breakdown (Monday - Sunday)
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
   const weekDayData = useMemo(() => {
     return daysOfWeek.map((day) => {
-      const treesForDay = plantedTrees.filter((t) => t.weekNumber === 3 && t.dayOfWeek === day);
+      const treesForDay = plantedTrees.filter(
+        (t) => t.dayOfWeek === day || t.dayOfWeek === day.slice(0, 3)
+      );
       const mins = treesForDay.reduce((acc, t) => acc + t.focusMinutes, 0);
       return {
         day,
         hours: Number((mins / 60).toFixed(1)),
         treesCount: treesForDay.length,
-        isToday: day === 'Tuesday',
+        isToday: day === currentWeekday,
       };
     });
-  }, [plantedTrees]);
+  }, [plantedTrees, currentWeekday]);
 
   // Month breakdown (Weeks of September 2026)
   const monthWeeks = [

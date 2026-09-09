@@ -50,6 +50,28 @@ export interface UserDataState {
 
 const getLocalUserStorageKey = (userId: string) => `studyflow_userdata_${userId}`;
 
+/**
+ * Recursively remove `undefined` values and sanitize payloads so Firestore setDoc/updateDoc never fails
+ */
+export function cleanForFirestore<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as unknown as T;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => cleanForFirestore(item)) as unknown as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanForFirestore(value);
+      }
+    }
+    return cleaned as unknown as T;
+  }
+  return obj;
+}
+
 export function getLocalUserState(userId: string): Partial<UserDataState> | null {
   try {
     const raw = localStorage.getItem(getLocalUserStorageKey(userId));
@@ -135,7 +157,7 @@ export async function initializeUserAccount(
     const userDocSnap = await getDoc(userDocRef);
 
     if (!userDocSnap.exists()) {
-      await setDoc(userDocRef, {
+      await setDoc(userDocRef, cleanForFirestore({
         email,
         displayName: customProfile.name,
         role: customProfile.role || (isAdmin ? 'admin' : 'student'),
@@ -148,21 +170,21 @@ export async function initializeUserAccount(
         weeklyPlan: initialWeeklyPlan,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
+      }));
 
       // Only seed subcollections if demo account requested
       if (isDemo) {
         for (const course of INITIAL_COURSES) {
-          await setDoc(doc(db, 'users', userId, 'courses', course.id), course);
+          await setDoc(doc(db, 'users', userId, 'courses', course.id), cleanForFirestore(course), { merge: true });
         }
         for (const task of INITIAL_TASKS) {
-          await setDoc(doc(db, 'users', userId, 'tasks', task.id), task);
+          await setDoc(doc(db, 'users', userId, 'tasks', task.id), cleanForFirestore(task), { merge: true });
         }
         for (const tree of INITIAL_PLANTED_TREES) {
-          await setDoc(doc(db, 'users', userId, 'plantedTrees', tree.id), tree);
+          await setDoc(doc(db, 'users', userId, 'plantedTrees', tree.id), cleanForFirestore(tree), { merge: true });
         }
         for (const lecture of INITIAL_COLLEGE_LECTURES) {
-          await setDoc(doc(db, 'users', userId, 'lectures', lecture.id), lecture);
+          await setDoc(doc(db, 'users', userId, 'lectures', lecture.id), cleanForFirestore(lecture), { merge: true });
         }
       }
     }
@@ -190,10 +212,10 @@ export async function clearAllUserData(userId: string): Promise<void> {
 
   try {
     const userDocRef = doc(db, 'users', userId);
-    await updateDoc(userDocRef, {
+    await updateDoc(userDocRef, cleanForFirestore({
       ...emptyState,
       updatedAt: new Date().toISOString(),
-    });
+    }));
 
     // Delete existing subcollections documents
     const subcollections = ['courses', 'tasks', 'plantedTrees', 'lectures'];
@@ -228,22 +250,22 @@ export async function populateSampleData(userId: string): Promise<void> {
 
   try {
     const userDocRef = doc(db, 'users', userId);
-    await updateDoc(userDocRef, {
+    await setDoc(userDocRef, cleanForFirestore({
       ...sampleState,
       updatedAt: new Date().toISOString(),
-    });
+    }), { merge: true });
 
     for (const course of INITIAL_COURSES) {
-      await setDoc(doc(db, 'users', userId, 'courses', course.id), course);
+      await setDoc(doc(db, 'users', userId, 'courses', course.id), cleanForFirestore(course), { merge: true });
     }
     for (const task of INITIAL_TASKS) {
-      await setDoc(doc(db, 'users', userId, 'tasks', task.id), task);
+      await setDoc(doc(db, 'users', userId, 'tasks', task.id), cleanForFirestore(task), { merge: true });
     }
     for (const tree of INITIAL_PLANTED_TREES) {
-      await setDoc(doc(db, 'users', userId, 'plantedTrees', tree.id), tree);
+      await setDoc(doc(db, 'users', userId, 'plantedTrees', tree.id), cleanForFirestore(tree), { merge: true });
     }
     for (const lecture of INITIAL_COLLEGE_LECTURES) {
-      await setDoc(doc(db, 'users', userId, 'lectures', lecture.id), lecture);
+      await setDoc(doc(db, 'users', userId, 'lectures', lecture.id), cleanForFirestore(lecture), { merge: true });
     }
   } catch (err) {
     console.warn('Error populating sample data:', err);
@@ -362,12 +384,13 @@ export async function updateUserProfileDoc(userId: string, data: Partial<UserDat
   saveLocalUserState(userId, data);
   try {
     const userDocRef = doc(db, 'users', userId);
-    await updateDoc(userDocRef, {
+    const sanitized = cleanForFirestore({
       ...data,
       updatedAt: new Date().toISOString(),
     });
+    await updateDoc(userDocRef, sanitized);
   } catch (err) {
-    console.warn('Firestore updateUserProfileDoc saved locally:', err);
+    console.warn('Firestore updateUserProfileDoc error:', err);
   }
 }
 
@@ -379,9 +402,22 @@ export async function saveCourseToDb(userId: string, course: Course): Promise<vo
 
   try {
     const courseDoc = doc(db, 'users', userId, 'courses', course.id);
-    await setDoc(courseDoc, course);
+    const sanitized = cleanForFirestore(course);
+    await setDoc(courseDoc, sanitized, { merge: true });
   } catch (err) {
-    console.warn('Firestore saveCourseToDb saved locally:', err);
+    console.error('Firestore saveCourseToDb failed:', err);
+  }
+}
+
+export async function saveCoursesToDb(userId: string, courses: Course[]): Promise<void> {
+  saveLocalUserState(userId, { courses });
+  try {
+    for (const course of courses) {
+      const courseDoc = doc(db, 'users', userId, 'courses', course.id);
+      await setDoc(courseDoc, cleanForFirestore(course), { merge: true });
+    }
+  } catch (err) {
+    console.error('Firestore saveCoursesToDb error:', err);
   }
 }
 
@@ -394,7 +430,7 @@ export async function deleteCourseFromDb(userId: string, courseId: string): Prom
     const courseDoc = doc(db, 'users', userId, 'courses', courseId);
     await deleteDoc(courseDoc);
   } catch (err) {
-    console.warn('Firestore deleteCourseFromDb saved locally:', err);
+    console.warn('Firestore deleteCourseFromDb error:', err);
   }
 }
 
@@ -406,9 +442,10 @@ export async function saveTaskToDb(userId: string, task: Task): Promise<void> {
 
   try {
     const taskDoc = doc(db, 'users', userId, 'tasks', task.id);
-    await setDoc(taskDoc, task);
+    const sanitized = cleanForFirestore(task);
+    await setDoc(taskDoc, sanitized, { merge: true });
   } catch (err) {
-    console.warn('Firestore saveTaskToDb saved locally:', err);
+    console.error('Firestore saveTaskToDb error:', err);
   }
 }
 
@@ -421,7 +458,7 @@ export async function deleteTaskFromDb(userId: string, taskId: string): Promise<
     const taskDoc = doc(db, 'users', userId, 'tasks', taskId);
     await deleteDoc(taskDoc);
   } catch (err) {
-    console.warn('Firestore deleteTaskFromDb saved locally:', err);
+    console.warn('Firestore deleteTaskFromDb error:', err);
   }
 }
 
@@ -433,9 +470,9 @@ export async function savePlantedTreeToDb(userId: string, tree: PlantedTree): Pr
 
   try {
     const treeDoc = doc(db, 'users', userId, 'plantedTrees', tree.id);
-    await setDoc(treeDoc, tree);
+    await setDoc(treeDoc, cleanForFirestore(tree), { merge: true });
   } catch (err) {
-    console.warn('Firestore savePlantedTreeToDb saved locally:', err);
+    console.warn('Firestore savePlantedTreeToDb error:', err);
   }
 }
 
@@ -453,10 +490,10 @@ export async function saveLecturesToDb(userId: string, lectures: CollegeLecture[
     }
     for (const lecture of lectures) {
       const lectureDoc = doc(db, 'users', userId, 'lectures', lecture.id);
-      await setDoc(lectureDoc, lecture);
+      await setDoc(lectureDoc, cleanForFirestore(lecture), { merge: true });
     }
   } catch (err) {
-    console.warn('Firestore saveLecturesToDb saved locally:', err);
+    console.warn('Firestore saveLecturesToDb error:', err);
   }
 }
 
@@ -469,7 +506,7 @@ export async function deleteLectureFromDb(userId: string, lectureId: string): Pr
     const lectureDoc = doc(db, 'users', userId, 'lectures', lectureId);
     await deleteDoc(lectureDoc);
   } catch (err) {
-    console.warn('Firestore deleteLectureFromDb saved locally:', err);
+    console.warn('Firestore deleteLectureFromDb error:', err);
   }
 }
 
@@ -509,24 +546,24 @@ export async function saveBatchScannedWorkspaceData(
 
   try {
     const userDocRef = doc(db, 'users', userId);
-    await updateDoc(userDocRef, {
+    await updateDoc(userDocRef, cleanForFirestore({
       todayPlan: data.todayPlan,
       weeklyPlan: data.weeklyPlan,
       availability: data.availability,
       updatedAt: new Date().toISOString(),
-    });
+    }));
 
     for (const course of data.courses) {
-      await setDoc(doc(db, 'users', userId, 'courses', course.id), course);
+      await setDoc(doc(db, 'users', userId, 'courses', course.id), cleanForFirestore(course), { merge: true });
     }
     for (const task of data.tasks) {
-      await setDoc(doc(db, 'users', userId, 'tasks', task.id), task);
+      await setDoc(doc(db, 'users', userId, 'tasks', task.id), cleanForFirestore(task), { merge: true });
     }
     for (const lecture of data.lectures) {
-      await setDoc(doc(db, 'users', userId, 'lectures', lecture.id), lecture);
+      await setDoc(doc(db, 'users', userId, 'lectures', lecture.id), cleanForFirestore(lecture), { merge: true });
     }
   } catch (err) {
-    console.warn('Firestore saveBatchScannedWorkspaceData saved locally:', err);
+    console.warn('Firestore saveBatchScannedWorkspaceData error:', err);
   }
 }
 

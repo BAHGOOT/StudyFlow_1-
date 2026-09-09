@@ -169,7 +169,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
       id: `tree-${Date.now()}`,
       plantedAt: new Date().toISOString(),
       weekNumber: 1,
-      dayOfWeek: new Date().toLocaleDateString('en-US', { weekday: 'short' }),
+      dayOfWeek: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
       month: new Date().toLocaleDateString('en-US', { month: 'short' }),
       status: 'healthy',
     };
@@ -334,24 +334,25 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
       return updated;
     });
 
-    const now = new Date('2026-09-08T12:00:00');
+    const now = new Date();
     const targetDate = new Date(now);
-    let targetDay: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday' = 'Wednesday';
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
     if (option === 'tomorrow') {
       targetDate.setDate(targetDate.getDate() + 1);
-      targetDay = 'Wednesday';
     } else if (option === 'friday') {
-      targetDate.setDate(targetDate.getDate() + 3);
-      targetDay = 'Friday';
+      const currentDay = now.getDay();
+      const daysUntilFriday = (5 - currentDay + 7) % 7 || 7;
+      targetDate.setDate(targetDate.getDate() + daysUntilFriday);
     } else if (option === 'weekend') {
-      targetDate.setDate(targetDate.getDate() + 4);
-      targetDay = 'Saturday';
+      const currentDay = now.getDay();
+      const daysUntilSaturday = (6 - currentDay + 7) % 7 || 7;
+      targetDate.setDate(targetDate.getDate() + daysUntilSaturday);
     } else {
       targetDate.setDate(targetDate.getDate() + 7);
-      targetDay = 'Monday';
     }
 
+    const targetDay = (dayNames[targetDate.getDay()] || 'Monday') as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
     const newDeadlineStr = `${targetDate.toISOString().slice(0, 10)}T23:59`;
 
     setTasks((prev) => {

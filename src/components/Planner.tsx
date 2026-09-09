@@ -95,6 +95,15 @@ export function Planner({
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'completed').length;
 
+  // Dynamic week and month context
+  const now = new Date();
+  const currentMonthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const currentWeekStart = new Date(now);
+  currentWeekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const currentWeekEnd = new Date(currentWeekStart);
+  currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+  const weekRangeStr = `${currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${currentWeekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
   return (
     <div id="planner-page" className="space-y-6 pb-20 animate-in fade-in duration-200">
       {/* Top Header & Navigation */}
@@ -184,7 +193,7 @@ export function Planner({
             }`}
           >
             <Calendar className="w-4 h-4 text-indigo-600" />
-            <span>Month Summary (September)</span>
+            <span>Month Summary ({now.toLocaleDateString('en-US', { month: 'short' })})</span>
           </button>
         </div>
 
@@ -192,11 +201,11 @@ export function Planner({
         <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
           {viewMode === 'week' ? (
             <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
-              <span>Week 3: September 7 – 13, 2026</span>
+              <span>Current Week: {weekRangeStr}</span>
             </span>
           ) : (
             <span className="flex items-center gap-1.5 bg-indigo-50 text-indigo-900 px-3 py-1.5 rounded-xl border border-indigo-200">
-              <span>Semester Month Overview: September 2026</span>
+              <span>Semester Month Overview: {currentMonthName}</span>
             </span>
           )}
         </div>

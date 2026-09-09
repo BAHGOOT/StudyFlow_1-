@@ -34,16 +34,22 @@ export function AddTaskModal({ isOpen, onClose, courses, onAddTask }: AddTaskMod
 
   if (!isOpen) return null;
 
+  const selectedCourse = courses.find((c) => c.id === (courseId || courses[0]?.id));
+
   // Live calculation of smart score for student feedback
-  const calculated = calculateSmartPriority({
-    name,
-    courseId,
-    type,
-    deadline,
-    estimatedMinutes,
-    importance,
-    difficulty,
-  });
+  const calculated = calculateSmartPriority(
+    {
+      name,
+      courseId: courseId || courses[0]?.id,
+      type,
+      deadline,
+      estimatedMinutes,
+      importance,
+      difficulty,
+    },
+    new Date(),
+    selectedCourse
+  );
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();

@@ -204,7 +204,7 @@ function processExtractedData(
   });
 
   // 3. Format Study & Syllabus Tasks
-  const now = new Date('2026-09-08T11:42:00');
+  const now = new Date();
   const tasks: Task[] = [];
 
   extractedTasksRaw.forEach((tRaw, idx) => {

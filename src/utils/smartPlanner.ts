@@ -14,7 +14,7 @@ import {
  */
 export function calculateSmartPriority(
   task: Partial<Task>,
-  currentDate: Date = new Date('2026-09-08T11:42:00'),
+  currentDate: Date = new Date(),
   course?: Course
 ): { score: number; reason: string } {
   const importance = task.importance || 3;
@@ -90,9 +90,10 @@ export function getDoThisNowTask(tasks: Task[], skippedTaskIds: string[] = []): 
 export function getTodayCapacityMetrics(
   todayPlan: TodayPlanItem[],
   availability: StudyAvailability,
-  dayOfWeek: keyof StudyAvailability['dailyHours'] = 'Tuesday'
+  dayOfWeek?: keyof StudyAvailability['dailyHours']
 ) {
-  const availableHours = availability.dailyHours[dayOfWeek] ?? 3;
+  const currentDayName = (dayOfWeek || new Date().toLocaleDateString('en-US', { weekday: 'long' })) as keyof StudyAvailability['dailyHours'];
+  const availableHours = availability.dailyHours[currentDayName] ?? 3;
   const availableMinutes = availableHours * 60;
 
   // Planned minutes from active plan items
@@ -127,7 +128,7 @@ export function getTodayCapacityMetrics(
  */
 export function formatDeadlineRelative(
   deadlineStr: string,
-  currentDate: Date = new Date('2026-09-08T11:42:00')
+  currentDate: Date = new Date()
 ): { text: string; urgency: 'critical' | 'high' | 'medium' | 'normal' } {
   const deadline = new Date(deadlineStr);
   const now = currentDate.getTime();

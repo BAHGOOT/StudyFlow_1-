@@ -164,7 +164,8 @@ export function Dashboard({
   };
 
   // Today's study capacity calculation
-  const capacity = getTodayCapacityMetrics(todayPlan, availability, 'Tuesday');
+  const todayDayName = new Date().toLocaleDateString('en-US', { weekday: 'long' }) as keyof StudyAvailability['dailyHours'];
+  const capacity = getTodayCapacityMetrics(todayPlan, availability, todayDayName);
 
   // Upcoming deadlines (next 4 urgent active tasks)
   const upcomingDeadlines = [...activeTasks]
