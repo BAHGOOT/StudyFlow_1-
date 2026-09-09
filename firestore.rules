@@ -1,20 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'mohamedelkoramy97@gmail.com';
-    }
-
-    function isOwner(userId) {
-      return request.auth != null && (request.auth.uid == userId || isAdmin());
-    }
-
-    // User document and all nested collections (courses, tasks, lectures, plantedTrees, etc.)
     match /users/{userId} {
-      allow read, write: if isOwner(userId) || request.auth == null;
+      allow read, write: if true;
 
       match /{allSubcollections=**} {
-        allow read, write: if isOwner(userId) || request.auth == null;
+        allow read, write: if true;
       }
     }
   }

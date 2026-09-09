@@ -234,7 +234,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (firebaseErr: unknown) {
       const err = firebaseErr as { code?: string; message?: string };
-      console.warn('Firebase signup fallback notification:', err.code || err.message);
+      if (err.code === 'auth/email-already-in-use') {
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, pass);
+          if (userCredential.user) {
+            const authUser: AuthUser = {
+              uid: userCredential.user.uid,
+              email: normalizedEmail,
+              displayName: name || userCredential.user.displayName || normalizedEmail.split('@')[0],
+            };
+            setCurrentUser(authUser);
+            localStorage.setItem(LOCAL_STORAGE_ACTIVE_USER_KEY, JSON.stringify(authUser));
+            await initializeUserAccount(authUser.uid, normalizedEmail, name, major, university, isDemo);
+            return;
+          }
+        } catch (signInErr) {
+          console.warn('Firebase signin on existing email failed:', signInErr);
+        }
+      } else {
+        console.warn('Firebase signup fallback notification:', err.code || err.message);
+      }
     }
 
     // 2. Resilient student account fallback

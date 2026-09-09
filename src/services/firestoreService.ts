@@ -133,30 +133,39 @@ export async function initializeUserAccount(
   const initialWeeklyPlan = isDemo ? INITIAL_WEEKLY_PLAN : [];
   const initialCoins = isDemo ? 100 : (isAdmin ? 500 : 0);
 
-  // Initialize local cache if not already set
-  const localExisting = getLocalUserState(userId);
-  if (!localExisting) {
-    saveLocalUserState(userId, {
-      profile: customProfile,
-      courses: initialCourses,
-      tasks: initialTasks,
-      todayPlan: initialTodayPlan,
-      weeklyPlan: initialWeeklyPlan,
-      availability: INITIAL_AVAILABILITY,
-      plantedTrees: initialTrees,
-      lectures: initialLectures,
-      commute: INITIAL_COLLEGE_COMMUTE,
-      coins: initialCoins,
-      unlockedSpecies: DEFAULT_UNLOCKED_SPECIES,
-    });
-  }
-
   // Attempt to initialize in Firestore
   try {
     const userDocRef = doc(db, 'users', userId);
     const userDocSnap = await getDoc(userDocRef);
 
-    if (!userDocSnap.exists()) {
+    if (userDocSnap.exists()) {
+      // User already exists in Firestore -> Cache existing profile/plan in local storage
+      const d = userDocSnap.data();
+      saveLocalUserState(userId, {
+        profile: d.profile || customProfile,
+        availability: d.availability || INITIAL_AVAILABILITY,
+        commute: d.commute || INITIAL_COLLEGE_COMMUTE,
+        coins: d.coins ?? 0,
+        unlockedSpecies: d.unlockedSpecies || DEFAULT_UNLOCKED_SPECIES,
+        todayPlan: d.todayPlan || [],
+        weeklyPlan: d.weeklyPlan || [],
+      });
+    } else {
+      // Initialize local cache for new user
+      saveLocalUserState(userId, {
+        profile: customProfile,
+        courses: initialCourses,
+        tasks: initialTasks,
+        todayPlan: initialTodayPlan,
+        weeklyPlan: initialWeeklyPlan,
+        availability: INITIAL_AVAILABILITY,
+        plantedTrees: initialTrees,
+        lectures: initialLectures,
+        commute: INITIAL_COLLEGE_COMMUTE,
+        coins: initialCoins,
+        unlockedSpecies: DEFAULT_UNLOCKED_SPECIES,
+      });
+
       await setDoc(userDocRef, cleanForFirestore({
         email,
         displayName: customProfile.name,
@@ -170,7 +179,7 @@ export async function initializeUserAccount(
         weeklyPlan: initialWeeklyPlan,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      }));
+      }), { merge: true });
 
       // Only seed subcollections if demo account requested
       if (isDemo) {
@@ -212,10 +221,10 @@ export async function clearAllUserData(userId: string): Promise<void> {
 
   try {
     const userDocRef = doc(db, 'users', userId);
-    await updateDoc(userDocRef, cleanForFirestore({
+    await setDoc(userDocRef, cleanForFirestore({
       ...emptyState,
       updatedAt: new Date().toISOString(),
-    }));
+    }), { merge: true });
 
     // Delete existing subcollections documents
     const subcollections = ['courses', 'tasks', 'plantedTrees', 'lectures'];
@@ -280,7 +289,7 @@ export function subscribeToUserData(
   onData: (data: Partial<UserDataState>) => void,
   onError?: (error: Error) => void
 ) {
-  // Emit initial local state immediately
+  // Emit initial local state immediately if available
   const cached = getLocalUserState(userId);
   if (cached) {
     onData(cached);
@@ -294,21 +303,21 @@ export function subscribeToUserData(
     (snapshot) => {
       if (snapshot.exists()) {
         const d = snapshot.data();
-        const update: Partial<UserDataState> = {
-          profile: d.profile,
-          availability: d.availability,
-          commute: d.commute,
-          coins: d.coins ?? 0,
-          unlockedSpecies: d.unlockedSpecies ?? DEFAULT_UNLOCKED_SPECIES,
-          todayPlan: d.todayPlan || [],
-          weeklyPlan: d.weeklyPlan || [],
-        };
+        const update: Partial<UserDataState> = {};
+        if (d.profile !== undefined) update.profile = d.profile;
+        if (d.availability !== undefined) update.availability = d.availability;
+        if (d.commute !== undefined) update.commute = d.commute;
+        if (d.coins !== undefined) update.coins = d.coins;
+        if (d.unlockedSpecies !== undefined) update.unlockedSpecies = d.unlockedSpecies;
+        if (d.todayPlan !== undefined) update.todayPlan = d.todayPlan;
+        if (d.weeklyPlan !== undefined) update.weeklyPlan = d.weeklyPlan;
+
         saveLocalUserState(userId, update);
         onData(update);
       }
     },
     (err) => {
-      console.warn('User doc listener fallback:', err.message);
+      console.warn('User doc listener notification:', err.message);
       if (onError) onError(err);
     }
   );
@@ -323,7 +332,7 @@ export function subscribeToUserData(
       onData({ courses });
     },
     (err) => {
-      console.warn('Courses listener fallback:', err.message);
+      console.warn('Courses listener notification:', err.message);
     }
   );
 
@@ -337,7 +346,7 @@ export function subscribeToUserData(
       onData({ tasks });
     },
     (err) => {
-      console.warn('Tasks listener fallback:', err.message);
+      console.warn('Tasks listener notification:', err.message);
     }
   );
 
@@ -352,7 +361,7 @@ export function subscribeToUserData(
       onData({ plantedTrees });
     },
     (err) => {
-      console.warn('Trees listener fallback:', err.message);
+      console.warn('Trees listener notification:', err.message);
     }
   );
 
@@ -366,7 +375,7 @@ export function subscribeToUserData(
       onData({ lectures });
     },
     (err) => {
-      console.warn('Lectures listener fallback:', err.message);
+      console.warn('Lectures listener notification:', err.message);
     }
   );
 
@@ -388,7 +397,7 @@ export async function updateUserProfileDoc(userId: string, data: Partial<UserDat
       ...data,
       updatedAt: new Date().toISOString(),
     });
-    await updateDoc(userDocRef, sanitized);
+    await setDoc(userDocRef, sanitized, { merge: true });
   } catch (err) {
     console.warn('Firestore updateUserProfileDoc error:', err);
   }
@@ -546,12 +555,12 @@ export async function saveBatchScannedWorkspaceData(
 
   try {
     const userDocRef = doc(db, 'users', userId);
-    await updateDoc(userDocRef, cleanForFirestore({
+    await setDoc(userDocRef, cleanForFirestore({
       todayPlan: data.todayPlan,
       weeklyPlan: data.weeklyPlan,
       availability: data.availability,
       updatedAt: new Date().toISOString(),
-    }));
+    }), { merge: true });
 
     for (const course of data.courses) {
       await setDoc(doc(db, 'users', userId, 'courses', course.id), cleanForFirestore(course), { merge: true });
