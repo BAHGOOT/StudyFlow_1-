@@ -29,6 +29,22 @@ interface MyTasksProps {
 
 type FilterOption = 'All' | 'Today' | 'Upcoming' | 'Overdue' | 'Completed';
 type SortOption = 'Priority' | 'Deadline' | 'Course' | 'Estimated time';
+type GroupingOption = 'none' | 'course' | 'dueDate';
+
+/**
+ * Simplifies auto-generated task titles by removing repetitive verbose suffixes.
+ */
+export function simplifyTaskTitle(title: string): string {
+  if (!title) return '';
+  return title
+    .replace(/:\s*Core Concepts & Lecture Synthesis/i, ' - Core Concepts')
+    .replace(/:\s*Deep Problem Practice & Application/i, ' - Practice Problems')
+    .replace(/\(Stage 1:\s*Concept Review & Synthesis\)/i, '- Concept Review')
+    .replace(/\(Stage 2:\s*Practice Problems & Application\)/i, '- Practice Problems')
+    .replace(/\(Stage 3:\s*Past Exams & Mock Review\)/i, '- Past Exams')
+    .replace(/:\s*Lecture Synthesis & Flashcard Review/i, ' - Synthesis')
+    .replace(/:\s*Problem Solving & Active Recall/i, ' - Active Recall');
+}
 
 export function getSmartPriorityLevel(score: number): {
   level: 'Low' | 'Medium' | 'High';
@@ -73,6 +89,7 @@ export function MyTasks({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterOption>('All');
   const [activeSort, setActiveSort] = useState<SortOption>('Priority');
+  const [groupingMode, setGroupingMode] = useState<GroupingOption>('none');
 
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
 
@@ -154,6 +171,180 @@ export function MyTasks({
       formattedAvgTime: formatDuration(avgMinutes),
     };
   }, [tasks]);
+
+  const renderTaskCard = (task: Task) => {
+    const course = getCourse(task.courseId);
+    const isCompleted = task.status === 'completed';
+    const relative = formatDeadlineRelative(task.deadline);
+    const priority = getSmartPriorityLevel(task.smartPriorityScore);
+
+    return (
+      <div
+        key={task.id}
+        id={`task-card-${task.id}`}
+        className={`group relative p-4 sm:p-5 rounded-2xl border bg-white transition-all duration-150 ${
+          isCompleted
+            ? 'border-slate-200 bg-slate-50/60 opacity-75'
+            : 'border-slate-200/90 hover:border-indigo-200 hover:shadow-xs'
+        }`}
+      >
+        {/* Color-coded priority edge indicator strip */}
+        <div
+          className={`absolute left-0 top-3.5 bottom-3.5 w-1 rounded-r-md transition-colors ${
+            isCompleted ? 'bg-slate-300' : priority.stripClass
+          }`}
+          title={`Priority: ${priority.level} (${task.smartPriorityScore}/99)`}
+        />
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pl-1.5">
+          {/* Left: Checkbox + Info */}
+          <div className="flex items-start gap-3.5 min-w-0">
+            {/* Checkbox */}
+            <button
+              type="button"
+              id={`task-check-${task.id}`}
+              onClick={() => onToggleComplete(task.id)}
+              className={`mt-1 w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 cursor-pointer ${
+                isCompleted
+                  ? 'bg-emerald-600 border-emerald-600 text-white'
+                  : 'border-slate-300 hover:border-indigo-500 bg-white'
+              }`}
+              aria-label="Toggle completed"
+            >
+              {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+            </button>
+
+            {/* Details */}
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Course Badge */}
+                {course && (
+                  <span
+                    className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold text-white uppercase tracking-wider"
+                    style={{ backgroundColor: course.accentHex }}
+                  >
+                    {course.name}
+                  </span>
+                )}
+
+                {/* Task Type */}
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
+                  {task.type}
+                </span>
+
+                {/* Unified Merged Priority Level & Score Badge */}
+                <span
+                  id={`task-priority-indicator-${task.id}`}
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold border transition-colors ${priority.badgeClass}`}
+                  title={`Smart Priority: ${priority.level} (Score: ${task.smartPriorityScore}/99)`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${priority.dotClass}`} />
+                  <span>P{task.smartPriorityScore} {priority.level}</span>
+                </span>
+
+                {/* In Progress Status Badge */}
+                {(task.status === 'in_progress' || activeTaskId === task.id) && (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    <span>In Progress</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Simplified Title */}
+              <h3
+                className={`text-sm sm:text-base font-bold ${
+                  isCompleted ? 'line-through text-slate-400' : 'text-slate-900'
+                }`}
+              >
+                {simplifyTaskTitle(task.name)}
+              </h3>
+
+              {task.notes && (
+                <p className="text-xs text-slate-500 line-clamp-1">{task.notes}</p>
+              )}
+
+              {/* Meta stats: Deadline & Duration */}
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-0.5">
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Due:</span>
+                  <span
+                    className={`font-semibold ${
+                      relative.urgency === 'critical'
+                        ? 'text-rose-600 font-bold'
+                        : relative.urgency === 'high'
+                        ? 'text-amber-600 font-semibold'
+                        : 'text-slate-700'
+                    }`}
+                  >
+                    {relative.text}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{formatDuration(task.estimatedMinutes)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Compact Sleek Action Controls */}
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            {!isCompleted && (
+              activeTaskId === task.id ? (
+                <button
+                  type="button"
+                  id={`view-in-progress-btn-${task.id}`}
+                  onClick={onExpandSession}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold shadow-xs transition-all active:scale-95 cursor-pointer ring-2 ring-amber-300 animate-pulse flex items-center gap-1.5"
+                  title="View active focus session timer"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Focusing</span>
+                </button>
+              ) : activeTaskId ? (
+                <button
+                  type="button"
+                  id={`disabled-start-btn-${task.id}`}
+                  disabled
+                  title="Another focus session is active"
+                  className="p-2 rounded-xl bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 opacity-60"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  id={`start-task-btn-${task.id}`}
+                  onClick={() => onStartTask(task)}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  title="Start Focus Session"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>{task.status === 'in_progress' ? 'Resume' : 'Start'}</span>
+                </button>
+              )
+            )}
+
+            <button
+              type="button"
+              id={`delete-task-btn-${task.id}`}
+              onClick={() => onDeleteTask(task.id)}
+              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+              title="Delete task"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div id="my-tasks-page" className="space-y-6 pb-20">
@@ -291,17 +482,32 @@ export function MyTasks({
           {/* Sort dropdown */}
           <div className="flex items-center gap-2 shrink-0">
             <SlidersHorizontal className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-semibold text-slate-500">Sort by:</span>
+            <span className="text-xs font-semibold text-slate-500">Sort:</span>
             <select
               id="sort-tasks-select"
               value={activeSort}
               onChange={(e) => setActiveSort(e.target.value as SortOption)}
-              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
             >
               <option value="Priority">Priority Score</option>
               <option value="Deadline">Deadline</option>
               <option value="Course">Course</option>
               <option value="Estimated time">Estimated Time</option>
+            </select>
+
+            <span className="text-slate-300">|</span>
+
+            {/* Grouping Selector */}
+            <span className="text-xs font-semibold text-slate-500">Group by:</span>
+            <select
+              id="group-tasks-select"
+              value={groupingMode}
+              onChange={(e) => setGroupingMode(e.target.value as GroupingOption)}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+            >
+              <option value="none">None (Flat List)</option>
+              <option value="course">Course Name</option>
+              <option value="dueDate">Due Date</option>
             </select>
           </div>
         </div>
@@ -352,8 +558,8 @@ export function MyTasks({
         </div>
       </div>
 
-      {/* Task Cards List */}
-      <div className="space-y-3">
+      {/* Task Cards List / Grouped List */}
+      <div className="space-y-6">
         {filteredTasks.length === 0 ? (
           <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
             <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -364,218 +570,61 @@ export function MyTasks({
                 : 'No tasks in this category. Click "+ Add Task" to create one.'}
             </p>
           </div>
+        ) : groupingMode === 'none' ? (
+          <div className="space-y-3">
+            {filteredTasks.map((task) => renderTaskCard(task))}
+          </div>
+        ) : groupingMode === 'course' ? (
+          // Group by Course Name
+          courses.map((course) => {
+            const courseTasks = filteredTasks.filter((t) => t.courseId === course.id);
+            if (courseTasks.length === 0) return null;
+            return (
+              <div key={course.id} className="space-y-3">
+                <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: course.accentHex }}
+                  />
+                  <h3 className="font-extrabold text-sm text-slate-900 font-display">
+                    {course.name} ({course.code})
+                  </h3>
+                  <span className="text-xs text-slate-400 font-semibold">
+                    • {courseTasks.length} {courseTasks.length === 1 ? 'task' : 'tasks'}
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {courseTasks.map((task) => renderTaskCard(task))}
+                </div>
+              </div>
+            );
+          })
         ) : (
-          filteredTasks.map((task) => {
-            const course = getCourse(task.courseId);
-            const isCompleted = task.status === 'completed';
-            const relative = formatDeadlineRelative(task.deadline);
-            const priority = getSmartPriorityLevel(task.smartPriorityScore);
+          // Group by Due Date
+          (['Overdue', 'Today', 'Upcoming', 'Completed'] as const).map((groupKey) => {
+            const groupTasks = filteredTasks.filter((t) => {
+              const rel = formatDeadlineRelative(t.deadline).text;
+              if (groupKey === 'Completed') return t.status === 'completed';
+              if (groupKey === 'Overdue') return t.status !== 'completed' && rel === 'Overdue';
+              if (groupKey === 'Today') return t.status !== 'completed' && rel === 'Today';
+              if (groupKey === 'Upcoming') return t.status !== 'completed' && rel !== 'Today' && rel !== 'Overdue';
+              return false;
+            });
+            if (groupTasks.length === 0) return null;
 
             return (
-              <div
-                key={task.id}
-                id={`task-card-${task.id}`}
-                className={`group relative p-5 rounded-2xl border bg-white transition-all duration-150 ${
-                  isCompleted
-                    ? 'border-slate-200 bg-slate-50/60 opacity-75'
-                    : 'border-slate-200/90 hover:border-indigo-200 hover:shadow-xs'
-                }`}
-              >
-                {/* Color-coded priority edge indicator strip */}
-                <div
-                  className={`absolute left-0 top-3.5 bottom-3.5 w-1 rounded-r-md transition-colors ${
-                    isCompleted ? 'bg-slate-300' : priority.stripClass
-                  }`}
-                  title={`Priority: ${priority.level} (${task.smartPriorityScore}/99)`}
-                />
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pl-1.5">
-                  {/* Left: Checkbox + Info */}
-                  <div className="flex items-start gap-4 min-w-0">
-                    {/* Checkbox */}
-                    <button
-                      type="button"
-                      id={`task-check-${task.id}`}
-                      onClick={() => onToggleComplete(task.id)}
-                      className={`mt-1 w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
-                        isCompleted
-                          ? 'bg-emerald-600 border-emerald-600 text-white'
-                          : 'border-slate-300 hover:border-indigo-500 bg-white'
-                      }`}
-                      aria-label="Toggle completed"
-                    >
-                      {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </button>
-
-                    {/* Details */}
-                    <div className="min-w-0 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* Course Badge */}
-                        {course && (
-                          <span
-                            className="px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white uppercase tracking-wider"
-                            style={{ backgroundColor: course.accentHex }}
-                          >
-                            {course.name}
-                          </span>
-                        )}
-
-                        {/* Task Type */}
-                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700">
-                          {task.type}
-                        </span>
-
-                        {/* Priority Level (low/medium/high) Color-Coded Indicator */}
-                        <span
-                          id={`task-priority-indicator-${task.id}`}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] border transition-colors ${priority.badgeClass}`}
-                          title={`Smart Priority: ${priority.level} (Score: ${task.smartPriorityScore}/99)`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${priority.dotClass}`} />
-                          <span>{priority.level}</span>
-                        </span>
-
-                        {/* In Progress Status Badge */}
-                        {(task.status === 'in_progress' || activeTaskId === task.id) && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                            </span>
-                            <span>In Progress</span>
-                          </span>
-                        )}
-
-                        {/* Priority Score badge */}
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          <Sparkles className="w-3 h-3 text-indigo-600" />
-                          <span>Score: {task.smartPriorityScore}</span>
-                        </span>
-                      </div>
-
-                      <h3
-                        className={`text-base font-bold ${
-                          isCompleted ? 'line-through text-slate-400' : 'text-slate-900'
-                        }`}
-                      >
-                        {task.name}
-                      </h3>
-
-                      {task.notes && (
-                        <p className="text-xs text-slate-500 line-clamp-1">{task.notes}</p>
-                      )}
-
-                      {/* Meta stats: Deadline, Duration, Importance, Difficulty */}
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
-                        {/* Deadline */}
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Deadline:</span>
-                          <span
-                            className={`font-semibold ${
-                              relative.urgency === 'critical'
-                                ? 'text-rose-600'
-                                : relative.urgency === 'high'
-                                ? 'text-amber-600'
-                                : 'text-slate-700'
-                            }`}
-                          >
-                            {relative.text}
-                          </span>
-                        </div>
-
-                        {/* Duration */}
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Est: {formatDuration(task.estimatedMinutes)}</span>
-                        </div>
-
-                        {/* Importance */}
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-400">Importance:</span>
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4, 5].map((lvl) => (
-                              <span
-                                key={`imp-dot-${lvl}`}
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  task.importance >= lvl ? 'bg-indigo-600' : 'bg-slate-200'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Difficulty */}
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-400">Difficulty:</span>
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4, 5].map((lvl) => (
-                              <span
-                                key={`diff-dot-${lvl}`}
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  task.difficulty >= lvl ? 'bg-amber-500' : 'bg-slate-200'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Actions */}
-                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                    {!isCompleted && (
-                      activeTaskId === task.id ? (
-                        <button
-                          id={`view-in-progress-btn-${task.id}`}
-                          onClick={onExpandSession}
-                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer ring-2 ring-amber-300 animate-pulse"
-                          title="This task is currently active in your focus session. Click to view timer."
-                        >
-                          <Maximize2 className="w-3.5 h-3.5" />
-                          <span>In Progress (View)</span>
-                        </button>
-                      ) : activeTaskId ? (
-                        <button
-                          id={`disabled-start-btn-${task.id}`}
-                          disabled
-                          title="Another focus session is currently in progress. Complete or pause it first."
-                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold cursor-not-allowed border border-slate-200 opacity-60"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Session Active</span>
-                        </button>
-                      ) : task.status === 'in_progress' ? (
-                        <button
-                          id={`resume-task-btn-${task.id}`}
-                          onClick={() => onStartTask(task)}
-                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Resume Task</span>
-                        </button>
-                      ) : (
-                        <button
-                          id={`start-task-btn-${task.id}`}
-                          onClick={() => onStartTask(task)}
-                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Start Task</span>
-                        </button>
-                      )
-                    )}
-
-                    <button
-                      id={`delete-task-btn-${task.id}`}
-                      onClick={() => onDeleteTask(task.id)}
-                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                      title="Delete task"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+              <div key={groupKey} className="space-y-3">
+                <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
+                  <Calendar className="w-4 h-4 text-indigo-600" />
+                  <h3 className="font-extrabold text-sm text-slate-900 font-display">
+                    {groupKey}
+                  </h3>
+                  <span className="text-xs text-slate-400 font-semibold">
+                    • {groupTasks.length} {groupTasks.length === 1 ? 'task' : 'tasks'}
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {groupTasks.map((task) => renderTaskCard(task))}
                 </div>
               </div>
             );

@@ -22,6 +22,8 @@ interface SettingsProps {
   availability: StudyAvailability;
   profile: StudentProfile;
   userEmail?: string;
+  darkMode?: boolean;
+  onToggleDarkMode?: (isDark: boolean) => void;
   onUpdateAvailability: (newAvailability: StudyAvailability) => void;
   onUpdateProfile: (newProfile: StudentProfile) => void;
   onClearData?: () => void;
@@ -36,6 +38,8 @@ export function Settings({
   availability,
   profile,
   userEmail,
+  darkMode,
+  onToggleDarkMode,
   onUpdateAvailability,
   onUpdateProfile,
   onClearData,
@@ -79,15 +83,15 @@ export function Settings({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-slate-900 dark:text-white tracking-tight">
             Settings
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Configure your daily study capacity, preferred study windows, and academic profile.
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Configure your appearance, daily study capacity, preferred study windows, and academic profile.
           </p>
         </div>
         {isSaved && (
-          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200 animate-in fade-in">
+          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 text-xs font-semibold border border-emerald-200 dark:border-emerald-800 animate-in fade-in">
             <Check className="w-3.5 h-3.5" />
             <span>Saved</span>
           </span>
@@ -95,17 +99,107 @@ export function Settings({
       </div>
 
       {/* ========================================================================= */}
+      {/* 0. APPEARANCE & GLOBAL DARK MODE                                          */}
+      {/* ========================================================================= */}
+      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6 transition-colors duration-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <Palette className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-display font-bold text-lg text-slate-900 dark:text-white">
+                Appearance &amp; Global Dark Mode
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Switch between bright clean light mode and eye-friendly dark mode across all screens.
+              </p>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <span className={`w-2 h-2 rounded-full ${darkMode ? 'bg-indigo-400 animate-pulse' : 'bg-amber-500'}`} />
+            <span>{darkMode ? 'Dark Theme Active' : 'Light Theme Active'}</span>
+          </div>
+        </div>
+
+        {/* Mode Selector Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Light Mode Option */}
+          <button
+            type="button"
+            id="theme-toggle-light-btn"
+            onClick={() => onToggleDarkMode?.(false)}
+            className={`p-5 rounded-2xl border text-left flex items-start gap-4 transition-all cursor-pointer ${
+              !darkMode
+                ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/40 ring-2 ring-indigo-600/20 shadow-xs'
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
+            }`}
+          >
+            <div className={`p-3 rounded-xl ${!darkMode ? 'bg-amber-500 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>
+              <Sun className="w-6 h-6" />
+            </div>
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className={`font-extrabold text-base ${!darkMode ? 'text-indigo-950 dark:text-indigo-200' : 'text-slate-900 dark:text-slate-100'}`}>
+                  Light Mode
+                </span>
+                {!darkMode && (
+                  <span className="p-1 rounded-full bg-indigo-600 text-white">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Clean off-white canvas with sharp typography and high-contrast blue/indigo accents.
+              </p>
+            </div>
+          </button>
+
+          {/* Dark Mode Option */}
+          <button
+            type="button"
+            id="theme-toggle-dark-btn"
+            onClick={() => onToggleDarkMode?.(true)}
+            className={`p-5 rounded-2xl border text-left flex items-start gap-4 transition-all cursor-pointer ${
+              darkMode
+                ? 'border-indigo-500 bg-indigo-950/60 ring-2 ring-indigo-500/30 shadow-xs'
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
+            }`}
+          >
+            <div className={`p-3 rounded-xl ${darkMode ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>
+              <Moon className="w-6 h-6" />
+            </div>
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className={`font-extrabold text-base ${darkMode ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
+                  Dark Mode
+                </span>
+                {darkMode && (
+                  <span className="p-1 rounded-full bg-indigo-500 text-white">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Eye-friendly dark slate background with glowing indicators, reducing eye strain for late study sessions.
+              </p>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
       {/* 1. STUDY AVAILABILITY SECTION (From prompt)                               */}
       {/* ========================================================================= */}
-      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
+      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6 transition-colors duration-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-2">
           <div>
-            <h2 className="font-display font-bold text-lg text-slate-900">Study availability</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="font-display font-bold text-lg text-slate-900 dark:text-white">Study availability</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               How much time can you study? StudyFlow distributes your semester tasks to fit this schedule.
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-indigo-50 border border-indigo-100 text-xs font-semibold text-indigo-700">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-100 dark:border-indigo-800 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Total: {totalWeeklyHours}h / week</span>
           </div>
@@ -118,9 +212,9 @@ export function Settings({
             return (
               <div
                 key={day}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 border border-slate-100 transition-colors"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-slate-100 dark:border-slate-800 transition-colors"
               >
-                <span className="font-semibold text-sm text-slate-800 w-28">{day}:</span>
+                <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 w-28">{day}:</span>
 
                 <div className="flex-1 max-w-xs mx-4">
                   <input
@@ -130,12 +224,12 @@ export function Settings({
                     step="0.5"
                     value={hours}
                     onChange={(e) => handleHourChange(day, parseFloat(e.target.value))}
-                    className="w-full accent-indigo-600"
+                    className="w-full accent-indigo-600 dark:accent-indigo-500"
                   />
                 </div>
 
                 <div className="flex items-center gap-2 w-20 justify-end font-mono">
-                  <span className="text-sm font-bold text-slate-900">{hours}h</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">{hours}h</span>
                 </div>
               </div>
             );
@@ -143,8 +237,8 @@ export function Settings({
         </div>
 
         {/* Preferred Study Hours */}
-        <div className="pt-4 border-t border-slate-100">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-3">
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-3">
             Preferred study hours
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -160,26 +254,26 @@ export function Settings({
                   key={slot.id}
                   type="button"
                   onClick={() => handlePreferredTime(slot.id as any)}
-                  className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
+                  className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
                     isSelected
-                      ? 'border-indigo-600 bg-indigo-50/60 ring-1 ring-indigo-600/30'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                      ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/60 ring-1 ring-indigo-600/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-800/40'
                   }`}
                 >
                   <Icon
                     className={`w-5 h-5 mt-0.5 ${
-                      isSelected ? 'text-indigo-600' : 'text-slate-400'
+                      isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
                     }`}
                   />
                   <div>
                     <span
                       className={`text-sm font-bold block ${
-                        isSelected ? 'text-indigo-900' : 'text-slate-800'
+                        isSelected ? 'text-indigo-900 dark:text-indigo-200' : 'text-slate-800 dark:text-slate-200'
                       }`}
                     >
                       {slot.label}
                     </span>
-                    <span className="text-xs text-slate-500">{slot.sub}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{slot.sub}</span>
                   </div>
                 </button>
               );
@@ -191,15 +285,15 @@ export function Settings({
       {/* ========================================================================= */}
       {/* 2. STUDENT ACCOUNT                                                        */}
       {/* ========================================================================= */}
-      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-          <User className="w-5 h-5 text-slate-500" />
-          <h2 className="font-display font-bold text-lg text-slate-900">Account</h2>
+      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4 transition-colors duration-200">
+        <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <User className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+          <h2 className="font-display font-bold text-lg text-slate-900 dark:text-white">Account</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
               Student Name
             </label>
             <input
@@ -210,12 +304,12 @@ export function Settings({
                 setCurrentProfile(p);
                 onUpdateProfile(p);
               }}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
               Academic Major
             </label>
             <input
@@ -226,12 +320,12 @@ export function Settings({
                 setCurrentProfile(p);
                 onUpdateProfile(p);
               }}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
               Semester
             </label>
             <input
@@ -242,29 +336,29 @@ export function Settings({
                 setCurrentProfile(p);
                 onUpdateProfile(p);
               }}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-indigo-500/20"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
               Account Email
             </label>
-            <div className="flex items-center justify-between px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-medium truncate">
+            <div className="flex items-center justify-between px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 text-sm font-medium truncate">
               <span className="truncate">{userEmail || 'student@university.edu'}</span>
-              <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 font-semibold shrink-0 ml-2">
+              <span className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800 font-semibold shrink-0 ml-2">
                 Cloud Sync
               </span>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
               Current Plan
             </label>
-            <div className="flex items-center justify-between px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-semibold">
+            <div className="flex items-center justify-between px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 text-sm font-semibold">
               <span>{currentProfile.tier}</span>
-              <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
                 Active
               </span>
             </div>
@@ -273,37 +367,37 @@ export function Settings({
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. NOTIFICATIONS & THEME                                                  */}
+      {/* 3. NOTIFICATIONS & PREFERENCES                                            */}
       {/* ========================================================================= */}
-      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-          <Bell className="w-5 h-5 text-slate-500" />
-          <h2 className="font-display font-bold text-lg text-slate-900">Notifications & Preferences</h2>
+      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4 transition-colors duration-200">
+        <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <Bell className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+          <h2 className="font-display font-bold text-lg text-slate-900 dark:text-white">Notifications & Preferences</h2>
         </div>
 
         <div className="space-y-3">
-          <label className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:bg-slate-50 cursor-pointer">
+          <label className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer">
             <div>
-              <span className="text-sm font-semibold text-slate-800 block">
+              <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                 Morning Study Briefing
               </span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 Receive today's optimal study schedule at 08:00 AM
               </span>
             </div>
-            <input type="checkbox" defaultChecked className="w-4 h-4 accent-indigo-600 rounded" />
+            <input type="checkbox" defaultChecked className="w-4 h-4 accent-indigo-600 dark:accent-indigo-500 rounded" />
           </label>
 
-          <label className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:bg-slate-50 cursor-pointer">
+          <label className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer">
             <div>
-              <span className="text-sm font-semibold text-slate-800 block">
+              <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 block">
                 Urgent Deadline Warnings
               </span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 Alert when a high-weight task is within 24 hours
               </span>
             </div>
-            <input type="checkbox" defaultChecked className="w-4 h-4 accent-indigo-600 rounded" />
+            <input type="checkbox" defaultChecked className="w-4 h-4 accent-indigo-600 dark:accent-indigo-500 rounded" />
           </label>
         </div>
       </section>

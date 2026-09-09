@@ -565,36 +565,49 @@ export function rebalanceWeeklyPlanWithSchedule(
     return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
   });
 
-  // Map each day's study budget, college commitments, and analytical subject load
+  // Map each day's study budget, college commitments, and net free capacity
   const dayCapacities = DAYS_OF_WEEK_LIST.map((day) => {
     const isRest = day === restDay;
     const college = calculateCollegeDayCommitment(day, lectures, commute);
-    // On the designated rest day, study budget is 0 minutes
     const configuredHours = isRest ? 0 : (availability.dailyHours[day] ?? 3);
     const configuredMinutes = configuredHours * 60;
+
+    // Fixed college class hours in minutes
+    const fixedCollegeMinutes = college.totalCollegeMinutes;
+    const collegeClassHours = fixedCollegeMinutes / 60;
+
+    // Net Free Capacity = Daily Configured Study Capacity - Fixed College Hours
+    const netFreeMinutes = Math.max(0, configuredMinutes - fixedCollegeMinutes);
+
+    // Realistic Workload Cap: If fixed college class hours exceed 4 hours (>240m),
+    // cap scheduled study tasks for that day to AT MOST 1 or 2 light tasks (max 60-90m study)
+    const isClassHeavy = fixedCollegeMinutes > 240;
 
     return {
       day,
       isRestDay: isRest,
       college,
+      collegeClassHours,
+      fixedCollegeMinutes,
+      netFreeMinutes,
+      isClassHeavy,
       dayLectures: lectures.filter((l) => l.day === day),
       budgetMinutes: configuredMinutes,
       allocatedMinutes: 0,
+      sessionCount: 0,
       heavyAnalyticalCount: 0, // Prevent scheduling >2 heavy analytical subjects per day
       sessions: [] as PlannedSession[],
     };
   });
 
-  // Distribute tasks respecting deadlines, credit weights, heavy analytical subject caps, and rest day
+  // Distribute tasks respecting deadlines, credit weights, heavy analytical caps, and class workload offloading
   sortedTasks.forEach((task, taskIdx) => {
     const course = courses.find((c) => c.id === task.courseId);
     const credits = course?.credits || 3;
     const importance = task.importance || 3;
-    const isHeavy = isHeavyAnalyticalTask(task, course);
+    const isHeavy = isHeavyAnalyticalTask(task, course) || task.difficulty >= 4 || credits >= 4;
 
-    // Workload duration scales with credit hours, difficulty, and importance:
-    // Core 4-5 credit courses or high importance tasks get 60m - 90m blocks;
-    // lighter 1-2 credit subjects receive 30m - 45m blocks.
+    // Workload duration scales with credit hours, difficulty, and importance
     let taskDuration = task.estimatedMinutes || 45;
     if (credits >= 4 || importance >= 4 || task.difficulty >= 4) {
       taskDuration = Math.min(90, Math.max(60, taskDuration));
@@ -615,12 +628,33 @@ export function rebalanceWeeklyPlanWithSchedule(
     const pool = eligibleDays.length > 0 ? eligibleDays : nonRestDays;
     if (pool.length === 0) return;
 
+    // Filter out class-heavy days (>4h classes) if the day already has 1 or 2 sessions or if task is heavy
+    let candidateDays = pool.filter((d) => {
+      if (d.isClassHeavy) {
+        // Cap class-heavy days (>4h classes) to AT MOST 1 or 2 light tasks (or max 75m allocated)
+        if (d.sessionCount >= 2 || d.allocatedMinutes >= 75) return false;
+        if (isHeavy) return false; // Offload heavy tasks away from class-heavy days
+      }
+      return true;
+    });
+
+    if (candidateDays.length === 0) {
+      candidateDays = pool; // Fallback if all available days are class-heavy
+    }
+
     // WORKLOAD BALANCING RULE: Prevent scheduling more than 2 heavy analytical subjects on the same day
-    let candidateDays = pool;
     if (isHeavy) {
-      const nonOverloadedDays = pool.filter((d) => d.heavyAnalyticalCount < 2);
+      const nonOverloadedDays = candidateDays.filter((d) => d.heavyAnalyticalCount < 2);
       if (nonOverloadedDays.length > 0) {
         candidateDays = nonOverloadedDays;
+      }
+
+      // SMART LOAD OFFLOADING: Prefer low-class days (0-2 class hours) or weekend days for heavy tasks!
+      const lowClassDays = candidateDays.filter(
+        (d) => d.fixedCollegeMinutes <= 120 || d.day === 'Saturday' || d.day === 'Sunday'
+      );
+      if (lowClassDays.length > 0) {
+        candidateDays = lowClassDays;
       }
     }
 
@@ -640,7 +674,7 @@ export function rebalanceWeeklyPlanWithSchedule(
       // For assignments & general tasks: pick day with lowest load ratio before deadline
       let minLoadRatio = 9999;
       candidateDays.forEach((dayObj) => {
-        const totalCommitted = dayObj.allocatedMinutes + (dayObj.college.totalCollegeMinutes * 0.4);
+        const totalCommitted = dayObj.allocatedMinutes + (dayObj.fixedCollegeMinutes * 0.4);
         const ratio = totalCommitted / Math.max(60, dayObj.budgetMinutes);
         if (ratio < minLoadRatio) {
           minLoadRatio = ratio;
@@ -649,10 +683,11 @@ export function rebalanceWeeklyPlanWithSchedule(
       });
     }
 
-    // Track heavy analytical subject count for this day
+    // Track heavy analytical subject count & session count for this day
     if (isHeavy) {
       bestDayObj.heavyAnalyticalCount += 1;
     }
+    bestDayObj.sessionCount += 1;
 
     // Find non-conflicting time slot on the selected day
     const timeSlot = findAvailableStudyTimeSlot(

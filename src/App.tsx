@@ -39,6 +39,7 @@ import { FocusSessionModal } from './components/FocusSessionModal';
 import { FloatingFocusWidget } from './components/FloatingFocusWidget';
 import { CollegeScheduleModal } from './components/CollegeScheduleModal';
 import { AssessmentCheckModal } from './components/AssessmentCheckModal';
+import { PlanPreviewModal } from './components/PlanPreviewModal';
 import { AuthScreen } from './components/AuthScreen';
 import { AuthProvider, useAuth, AuthUser } from './contexts/AuthContext';
 import { useFocusSession } from './hooks/useFocusSession';
@@ -56,7 +57,7 @@ import {
   saveBatchScannedWorkspaceData,
 } from './services/firestoreService';
 import { ScannedTimetableResult } from './services/timetableScannerService';
-import { calculateSmartPriority, rebalanceWeeklyPlanWithSchedule, generateSmartStudyPlanFromLecturesAndCourses } from './utils/smartPlanner';
+import { calculateSmartPriority, rebalanceWeeklyPlanWithSchedule, generateSmartStudyPlanFromLecturesAndCourses, SmartStudyPlanGenerationResult } from './utils/smartPlanner';
 import { CheckCircle, GraduationCap, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -106,6 +107,31 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
   // Navigation State
   const [currentScreen, setCurrentScreen] = useState<NavScreen>('dashboard');
 
+  // Dark Mode State
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('studyflow_dark_mode');
+    if (saved !== null) {
+      return saved === 'true';
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  // Apply dark class on <html> element whenever darkMode changes
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('studyflow_dark_mode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('studyflow_dark_mode', 'false');
+    }
+  }, [darkMode]);
+
+  const handleToggleDarkMode = (isDark: boolean) => {
+    setDarkMode(isDark);
+    showToast(isDark ? 'Switched to Dark Mode!' : 'Switched to Light Mode!');
+  };
+
   // Student State (starts empty for genuine student accounts, synced in real-time via Firestore/local cache)
   const [courses, setCourses] = useState<Course[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -128,6 +154,8 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
   const [isCollegeScheduleOpen, setIsCollegeScheduleOpen] = useState(false);
   const [activeAssessmentTask, setActiveAssessmentTask] = useState<Task | null>(null);
   const [isMainTaskVisible, setIsMainTaskVisible] = useState<boolean>(true);
+  const [draftPlanResult, setDraftPlanResult] = useState<SmartStudyPlanGenerationResult | null>(null);
+  const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -537,8 +565,8 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
     showToast(`Extracted ${scanned.courses.length} courses, ${scanned.tasks.length} tasks, and generated your study plan!`);
   };
 
-  // Rebalance Plan respecting college lectures, commute, and deadlines
-  const handleRegeneratePlan = async () => {
+  // Generate draft plan for preview modal
+  const handleRegeneratePlan = () => {
     const result = generateSmartStudyPlanFromLecturesAndCourses({
       existingCourses: courses,
       existingTasks: tasks,
@@ -547,25 +575,30 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
       suggestedDailyHours: availability.dailyHours,
     });
 
-    setCourses(result.allCourses);
-    setTasks(result.allTasks);
-    setWeeklyPlan(result.weeklyPlan);
-    setTodayPlan(result.todayPlan);
+    setDraftPlanResult(result);
+    setIsPlanPreviewOpen(true);
+  };
+
+  // Confirm and save plan from PlanPreviewModal
+  const handleConfirmApplyPlan = async (
+    confirmedWeeklyPlan: PlannedSession[],
+    confirmedTasks: Task[],
+    confirmedTodayPlan: TodayPlanItem[]
+  ) => {
+    setWeeklyPlan(confirmedWeeklyPlan);
+    setTasks(confirmedTasks);
+    setTodayPlan(confirmedTodayPlan);
 
     await saveBatchScannedWorkspaceData(currentUser.uid, {
-      courses: result.allCourses,
-      tasks: result.allTasks,
+      courses,
+      tasks: confirmedTasks,
       lectures,
-      todayPlan: result.todayPlan,
-      weeklyPlan: result.weeklyPlan,
+      todayPlan: confirmedTodayPlan,
+      weeklyPlan: confirmedWeeklyPlan,
       availability,
     });
 
-    if (result.weeklyPlan.length > 0) {
-      showToast(`AI Study Plan remade: ${result.weeklyPlan.length} sessions scheduled to meet your deadlines!`);
-    } else {
-      showToast('Add your courses and timetable to generate a personalized study plan.');
-    }
+    showToast(`Applied and saved customized AI Study Plan (${confirmedWeeklyPlan.length} sessions)!`);
   };
 
   // Clear all user workspace data (empty slate)
@@ -604,7 +637,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-indigo-500/15 selection:text-indigo-950">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row font-sans selection:bg-indigo-500/15 selection:text-indigo-950 transition-colors duration-200">
       {/* Navigation */}
       <Navigation
         currentScreen={currentScreen}
@@ -730,6 +763,8 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
             availability={availability}
             profile={profile}
             userEmail={currentUser.email || undefined}
+            darkMode={darkMode}
+            onToggleDarkMode={handleToggleDarkMode}
             onUpdateAvailability={(newAvail) => {
               setAvailability(newAvail);
 
@@ -865,6 +900,16 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           handleToggleTaskComplete(taskId);
           setActiveAssessmentTask(null);
         }}
+      />
+
+      {/* Plan Preview & Draft Review Modal */}
+      <PlanPreviewModal
+        isOpen={isPlanPreviewOpen}
+        onClose={() => setIsPlanPreviewOpen(false)}
+        draftResult={draftPlanResult}
+        courses={courses}
+        tasks={tasks}
+        onConfirmApplyPlan={handleConfirmApplyPlan}
       />
     </div>
   );

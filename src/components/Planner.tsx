@@ -190,6 +190,31 @@ export function Planner({
         </div>
       </div>
 
+      {/* Prominent High-Visibility College Schedule Callout Banner */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-blue-500/10 border-2 border-amber-300/80 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-slate-900 font-extrabold text-sm sm:text-base">
+            <span className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+              🏛️
+            </span>
+            <span>Set your college timetable first so the AI knows your free hours</span>
+          </div>
+          <p className="text-xs text-slate-600 max-w-2xl leading-relaxed font-medium">
+            Configure your fixed college lecture slots, lab hours, and daily campus commute. StudyFlow automatically subtracts class commitments to calculate your true net free study capacity and prevent schedule overlaps.
+          </p>
+        </div>
+        {onOpenCollegeSchedule && (
+          <button
+            type="button"
+            onClick={onOpenCollegeSchedule}
+            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold rounded-xl shadow-md shrink-0 flex items-center gap-2 cursor-pointer transition-all active:scale-95 border border-slate-700"
+          >
+            <Car className="w-4 h-4 text-amber-400" />
+            <span>Configure College Schedule</span>
+          </button>
+        )}
+      </div>
+
       {/* Empty Plan Helper Banner */}
       {weeklyPlan.length === 0 && (
         <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

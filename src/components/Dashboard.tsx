@@ -7,6 +7,7 @@ import {
   Maximize2,
   SkipForward,
   CheckCircle,
+  CheckCircle2,
   Clock,
   Calendar,
   AlertTriangle,
@@ -541,12 +542,12 @@ export function Dashboard({
         </section>
       )}
 
-      {/* Main Grid: Today's Plan on left (60%), Capacity & Deadlines & Workload on right (40%) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      {/* Main Grid: Today's Plan on left (col-span-2), Capacity & Deadlines & Workload on right (col-span-1) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* ========================================================================= */}
-        {/* 2. TODAY'S PLAN (Left 7 Cols) — ORDERED BY PRIORITY                       */}
+        {/* 2. TODAY'S PLAN (Left 2 Cols) — ORDERED BY PRIORITY                       */}
         {/* ========================================================================= */}
-        <div className="lg:col-span-7 space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div>
@@ -557,44 +558,42 @@ export function Dashboard({
                   Ordered by priority score, upcoming deadlines, and study capacity
                 </p>
               </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-                Tuesday, Sep 8
+              <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200/80">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
               </span>
             </div>
 
             {/* Timeline Task Items */}
             <div className="space-y-3.5">
               {sortedTodayPlan.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50/70 rounded-2xl border border-dashed border-slate-200">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
-                    <Clock className="w-5 h-5" />
+                <div className="p-8 text-center bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-3 text-indigo-600 shadow-2xs">
+                    <CheckCircle2 className="w-6 h-6" />
                   </div>
-                  <h4 className="text-sm font-bold text-slate-800">No study sessions scheduled for today</h4>
-                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                  <h4 className="text-base font-bold text-slate-900">No study sessions remaining for today</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
                     {tasks.length === 0
                       ? courses.length > 0
-                        ? `You have ${courses.length} course${courses.length > 1 ? 's' : ''} enrolled! Add your tasks to generate today's study schedule.`
+                        ? `You have ${courses.length} course${courses.length > 1 ? 's' : ''} enrolled! Add your assignments or exams to generate today's study schedule.`
                         : 'Add your courses and tasks to automatically generate your optimized study schedule.'
-                      : 'All scheduled sessions for today are completed! Take a break.'}
+                      : 'All scheduled sessions for today are completed! Great job maintaining your academic momentum.'}
                   </p>
-                  {tasks.length === 0 && (
-                    <div className="mt-4 flex items-center justify-center gap-2">
-                      {courses.length === 0 && (
-                        <button
-                          onClick={onNavigateToCourses}
-                          className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs cursor-pointer"
-                        >
-                          + Add Course
-                        </button>
-                      )}
+                  <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+                    {courses.length === 0 && (
                       <button
-                        onClick={onNavigateToTasks}
-                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs cursor-pointer"
+                        onClick={onNavigateToCourses}
+                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-2xs transition-all active:scale-95 cursor-pointer"
                       >
-                        + Add Task
+                        + Add Course
                       </button>
-                    </div>
-                  )}
+                    )}
+                    <button
+                      onClick={onNavigateToTasks}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+                    >
+                      + Add Task
+                    </button>
+                  </div>
                 </div>
               ) : (
                 sortedTodayPlan.map((planItem) => {
@@ -749,7 +748,7 @@ export function Dashboard({
         {/* ========================================================================= */}
         {/* 3. RIGHT COLUMN: Capacity, Upcoming, Workload                             */}
         {/* ========================================================================= */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className="lg:col-span-1 space-y-6">
           {/* ======================================================================= */}
           {/* 3A. TODAY'S CAPACITY CARD                                               */}
           {/* ======================================================================= */}
