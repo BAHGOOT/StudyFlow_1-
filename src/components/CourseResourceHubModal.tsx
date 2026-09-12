@@ -45,17 +45,21 @@ export function CourseResourceHubModal({
 
   if (!isOpen || !course) return null;
 
+  // Safe fallback arrays
+  const safeMaterials = materials || [];
+  const safeTasks = tasks || [];
+
   // Filter materials for this course
   const courseMaterials = useMemo(() => {
-    return materials.filter(
+    return safeMaterials.filter(
       (m) =>
         m.courseId === course.id ||
         (m.courseName && m.courseName.toLowerCase() === course.name.toLowerCase())
     );
-  }, [materials, course]);
+  }, [safeMaterials, course]);
 
   // Filter tasks for this course
-  const courseTasks = useMemo(() => tasks.filter((t) => t.courseId === course.id), [tasks, course]);
+  const courseTasks = useMemo(() => safeTasks.filter((t) => t.courseId === course.id), [safeTasks, course]);
 
   // Split into active upcoming vs completed graded quizzes/exams
   const activeUpcomingTasks = useMemo(() => {
@@ -156,8 +160,30 @@ export function CourseResourceHubModal({
     window.print();
   };
 
+  const safeCopyToClipboard = (text: string): boolean => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        return true;
+      }
+      // Fallback method
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed'; // Avoid scrolling to bottom
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return successful;
+    } catch (err) {
+      console.warn('Failed to copy to clipboard', err);
+      return false;
+    }
+  };
+
   const handleCopyFormula = (rule: string) => {
-    navigator.clipboard.writeText(rule);
+    safeCopyToClipboard(rule);
     setCopiedFormula(rule);
     setTimeout(() => setCopiedFormula(null), 2000);
   };
@@ -180,7 +206,7 @@ ${activeUpcomingTasks.map((t) => `- [${t.type}] ${t.name} (Due: ${t.deadline})`)
 ${pastQuizExamResults.map((t) => `- ${t.name}: ${t.achievedGrade}/${t.maxGrade} pts (${t.conceptMasteryStatus || 'Completed'})`).join('\n')}
 ==================================================
 `;
-    navigator.clipboard.writeText(summaryText.trim());
+    safeCopyToClipboard(summaryText.trim());
     setCopiedSummary(true);
     setTimeout(() => setCopiedSummary(false), 2500);
   };
@@ -190,25 +216,59 @@ ${pastQuizExamResults.map((t) => `- ${t.name}: ${t.achievedGrade}/${t.maxGrade} 
       {/* Print-Only Style Injection */}
       <style>{`
         @media print {
-          body * {
-            visibility: hidden !important;
+          /* Hide everything in the body except the overlay content */
+          body > *:not(#course-resource-hub-overlay),
+          #root > *:not(#course-resource-hub-overlay),
+          .no-print {
+            display: none !important;
+            height: 0 !important;
+            overflow: hidden !important;
           }
-          #printable-course-resource-hub, #printable-course-resource-hub * {
-            visibility: visible !important;
+
+          body {
+            background: #ffffff !important;
+            color: #000000 !important;
+            overflow: visible !important;
           }
-          #printable-course-resource-hub {
+
+          /* Force the overlay to layout relative and expand naturally */
+          #course-resource-hub-overlay {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            padding: 20px !important;
+            height: auto !important;
+            min-height: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: #ffffff !important;
+            display: block !important;
+            overflow: visible !important;
+            z-index: auto !important;
+          }
+
+          /* Force the card to fit standard printing page width */
+          #course-resource-hub-card {
+            position: relative !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
             background: #ffffff !important;
             color: #000000 !important;
-            box-shadow: none !important;
-            border: none !important;
+            overflow: visible !important;
           }
-          .no-print {
-            display: none !important;
+
+          /* Allow content to flow naturally across pages instead of scrolling inside a container */
+          #printable-course-resource-hub {
+            max-height: none !important;
+            height: auto !important;
+            overflow: visible !important;
+            padding: 24px !important;
           }
         }
       `}</style>
