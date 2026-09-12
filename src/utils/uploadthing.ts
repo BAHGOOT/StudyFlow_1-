@@ -6,6 +6,13 @@ import {
 
 import type { OurFileRouter } from '../../server/uploadthing';
 
-export const UploadButton = generateUploadButton<OurFileRouter>();
-export const UploadDropzone = generateUploadDropzone<OurFileRouter>();
-export const { useUploadThing, uploadFiles } = generateReactHelpers<OurFileRouter>();
+export const UploadButton = generateUploadButton<OurFileRouter>({
+  url: '/api/uploadthing',
+});
+export const UploadDropzone = generateUploadDropzone<OurFileRouter>({
+  url: '/api/uploadthing',
+});
+export const { useUploadThing, uploadFiles } = generateReactHelpers<OurFileRouter>({
+  url: '/api/uploadthing',
+});
+
