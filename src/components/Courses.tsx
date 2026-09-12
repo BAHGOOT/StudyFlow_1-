@@ -19,6 +19,7 @@ interface CoursesProps {
   onToggleTaskComplete?: (taskId: string) => void;
   onOpenAddTaskForCourse?: (courseId: string) => void;
   onAddMaterial?: (material: CourseMaterial) => void;
+  onLoadSampleData?: () => void;
 }
 
 export function Courses({
@@ -33,6 +34,7 @@ export function Courses({
   onToggleTaskComplete,
   onOpenAddTaskForCourse,
   onAddMaterial,
+  onLoadSampleData,
 }: CoursesProps) {
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [selectedCourseForDetail, setSelectedCourseForDetail] = useState<Course | null>(null);
@@ -123,15 +125,27 @@ export function Courses({
             No courses in your schedule yet
           </h3>
           <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
-            Add your subjects and classes manually to personalize your study dashboard.
+            Add your subjects and classes manually, or load the pre-built sample semester catalog.
           </p>
-          <button
-            onClick={onOpenAddCourse}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Your First Course</span>
-          </button>
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <button
+              onClick={onOpenAddCourse}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Your First Course</span>
+            </button>
+            {onLoadSampleData && (
+              <button
+                type="button"
+                onClick={onLoadSampleData}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm border border-slate-200 transition-all cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <span>Load Sample Semester Catalog</span>
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         /* Course Cards Grid */
