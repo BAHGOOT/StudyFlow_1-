@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Course, Task, CourseMaterial } from '../types';
 import { safeCopyToClipboard } from '../utils/clipboard';
 import { useAuth } from '../contexts/AuthContext';
 import { saveMaterialToDb } from '../services/firestoreService';
-import { UploadDropzone } from '../utils/uploadthing';
+import { useUploadThing } from '../utils/uploadthing';
 import {
   X,
   Printer,
@@ -51,6 +51,7 @@ export function CourseResourceHubModal({
   onAddMaterial,
 }: CourseResourceHubModalProps) {
   const { currentUser } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'materials' | 'formulas' | 'upcoming' | 'results'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedFormula, setCopiedFormula] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export function CourseResourceHubModal({
   const [sortBy, setSortBy] = useState<'Newest' | 'Alphabetical' | 'Task Deadline'>('Newest');
   const [localMaterials, setLocalMaterials] = useState<CourseMaterial[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
 
   // Resolve course from courseId, courses list, or propCourse
@@ -178,6 +180,127 @@ export function CourseResourceHubModal({
       } catch (e) {
         // non-blocking
       }
+    }
+
+    setIsUploading(false);
+    setUploadStatus('');
+  };
+
+  // Uploadthing hook with explicit error diagnostics
+  const { startUpload } = useUploadThing('courseAttachment', {
+    onClientUploadComplete: (res) => {
+      handleUploadComplete(res);
+    },
+    onUploadError: (error: Error) => {
+      console.error('Detailed Uploadthing error in Course Resource Hub:', error);
+    },
+  });
+
+  // Client file processor supporting Uploadthing with local fallback
+  const processFiles = async (files: File[]) => {
+    if (!files.length || !course) return;
+    setIsUploading(true);
+    setUploadStatus('Uploading & indexing course material...');
+
+    try {
+      // Attempt upload via Uploadthing helper
+      const uploadRes = await startUpload(files);
+      if (uploadRes && uploadRes.length > 0) {
+        // onClientUploadComplete handles saving
+        return;
+      }
+    } catch (uploadError) {
+      console.error('Uploadthing startUpload failed, executing fallback indexing:', uploadError);
+    }
+
+    // Direct client processing fallback to guarantee user files are never lost
+    const userId = currentUser?.uid || 'usr_demo';
+    for (const file of files) {
+      const fileName = file.name;
+      const sizeInBytes = file.size;
+      const fileSizeStr = sizeInBytes < 1024 * 1024
+        ? `${(sizeInBytes / 1024).toFixed(1)} KB`
+        : `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+      const extension = fileName.split('.').pop()?.toLowerCase() || '';
+      let fileType: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc' = 'pdf';
+      if (['pptx', 'ppt'].includes(extension)) {
+        fileType = 'slides';
+      } else if (['docx', 'doc'].includes(extension)) {
+        fileType = 'doc';
+      } else if (fileName.toLowerCase().includes('syllabus')) {
+        fileType = 'syllabus';
+      } else if (['txt', 'md', 'json'].includes(extension)) {
+        fileType = 'notes';
+      } else {
+        fileType = 'pdf';
+      }
+
+      // Read as Data URL or Text
+      const fileDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+      });
+
+      const matId = `mat-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const title = fileName.replace(/\.[^/.]+$/, "");
+
+      const fallbackMat: CourseMaterial = {
+        id: matId,
+        courseId: course.id,
+        courseName: course.name,
+        title,
+        fileName,
+        fileType,
+        fileSizeStr,
+        pageCount: 1,
+        uploadedAt: new Date().toISOString(),
+        topicsSummary: ['Course Resource', 'Reference Document'],
+        chapterOutline: [
+          { title: 'Overview', pageRange: 'Page 1', summary: `Course attachment for ${course.name}.` },
+        ],
+        keyFormulasAndConcepts: [],
+        practiceProblems: [],
+        fileDataUrl,
+      };
+
+      await saveMaterialToDb(userId, fallbackMat);
+      setLocalMaterials((prev) => [fallbackMat, ...prev.filter((m) => m.id !== fallbackMat.id)]);
+      if (onAddMaterial) onAddMaterial(fallbackMat);
+
+      // AI indexing in background
+      try {
+        fetch('/api/materials/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: fallbackMat.title,
+            fileName,
+            fileType,
+            courseName: course.name,
+            textContent: `Course attachment uploaded for ${course.name}: ${fileName}.`,
+            fileUrl: fileDataUrl.slice(0, 500),
+          }),
+        }).then(async (r) => {
+          if (r.ok) {
+            const json = await r.json();
+            if (json.data) {
+              const updatedMat: CourseMaterial = {
+                ...fallbackMat,
+                topicsSummary: json.data.topicsSummary || fallbackMat.topicsSummary,
+                chapterOutline: json.data.chapterOutline || fallbackMat.chapterOutline,
+                keyFormulasAndConcepts: json.data.keyFormulasAndConcepts || fallbackMat.keyFormulasAndConcepts,
+                practiceProblems: json.data.practiceProblems || fallbackMat.practiceProblems,
+              };
+              await saveMaterialToDb(userId, updatedMat);
+              setLocalMaterials((prev) => [updatedMat, ...prev.filter((m) => m.id !== updatedMat.id)]);
+              if (onAddMaterial) onAddMaterial(updatedMat);
+            }
+          }
+        }).catch((err) => console.warn('AI Indexing notice:', err));
+      } catch {}
     }
 
     setIsUploading(false);
@@ -722,40 +845,84 @@ ${pastQuizExamResults.map((t) => `- ${t.name}: ${t.achievedGrade}/${t.maxGrade} 
                     </div>
 
                     {isUploading && (
-                      <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                      <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 animate-pulse">
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>{uploadStatus || 'Uploading...'}</span>
+                        <span>{uploadStatus || 'Uploading & indexing...'}</span>
                       </div>
                     )}
                   </div>
 
-                  <UploadDropzone
-                    endpoint="courseAttachment"
-                    onUploadBegin={() => {
-                      setIsUploading(true);
-                      setUploadStatus('Uploading file to course hub...');
+                  {/* Drag and Drop Container with direct File Input & Choose File button */}
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
                     }}
-                    onClientUploadComplete={handleUploadComplete}
-                    onUploadError={(error: Error) => {
-                      setIsUploading(false);
-                      setUploadStatus('');
-                      console.error('Upload error in Hub:', error);
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
                     }}
-                    appearance={{
-                      container: 'border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 bg-white dark:bg-slate-900 rounded-xl p-4 transition-all',
-                      label: 'text-xs font-bold text-slate-800 dark:text-slate-200',
-                      allowedContent: 'text-[10px] text-slate-500 dark:text-slate-400 font-medium',
-                      button: 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer ut-ready:bg-indigo-600 ut-uploading:cursor-not-allowed',
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        processFiles(Array.from(e.dataTransfer.files));
+                      }
                     }}
-                    content={{
-                      label: 'Drop course syllabus, slides, or PDF notes here',
-                      allowedContent: 'Accepts PDF, DOCX, PPTX, TXT',
-                      button({ ready }) {
-                        if (ready) return 'Choose File to Upload';
-                        return 'Readying...';
-                      },
-                    }}
-                  />
+                    className={`border-2 border-dashed rounded-xl p-6 text-center transition-all bg-white dark:bg-slate-900 flex flex-col items-center justify-center gap-3 ${
+                      isDragging
+                        ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 scale-[0.99]'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          processFiles(Array.from(e.target.files));
+                          e.target.value = '';
+                        }
+                      }}
+                      className="hidden"
+                      id="course-hub-file-input"
+                    />
+
+                    <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                      <Upload className="w-5 h-5" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Drop course syllabus, slides, or PDF notes here
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                        Accepts PDF, DOCX, PPTX, TXT (up to 32MB)
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      id="choose-course-attachment-btn"
+                      disabled={isUploading}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-2 active:scale-95"
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Choose File to Upload</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {courseMaterials.length === 0 ? (

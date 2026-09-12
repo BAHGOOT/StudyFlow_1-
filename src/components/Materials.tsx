@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Library,
   Upload,
@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { Course, CourseMaterial, MaterialOutlineTopic, MaterialFormulaConcept, Task } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { UploadDropzone, UploadButton } from '../utils/uploadthing';
+import { useUploadThing } from '../utils/uploadthing';
 
 interface MaterialsProps {
   courses: Course[];
@@ -43,9 +43,11 @@ export function Materials({
   onStartFocusSession,
 }: MaterialsProps) {
   const { currentUser } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [uploadCourseId, setUploadCourseId] = useState<string>(courses[0]?.id || '');
   const [uploadExamId, setUploadExamId] = useState<string>('none');
   const [uploadStatusMessage, setUploadStatusMessage] = useState<string>('');
@@ -194,6 +196,132 @@ export function Materials({
           ],
           practiceProblems: ['Review uploaded material.'],
           fileDataUrl: fileUrl,
+        };
+        onAddMaterial(fallbackMat);
+      }
+    }
+    setIsUploading(false);
+    setUploadStatusMessage('');
+  };
+
+  const { startUpload } = useUploadThing('courseMaterialUploader', {
+    onClientUploadComplete: (res) => {
+      handleUploadthingComplete(res);
+    },
+    onUploadError: (error: Error) => {
+      console.error('Detailed Uploadthing error in Materials view:', error);
+      setIsUploading(false);
+      setUploadStatusMessage('');
+    },
+  });
+
+  const processFiles = async (files: File[]) => {
+    if (!files.length) return;
+    setIsUploading(true);
+    setUploadStatusMessage('Uploading & indexing course documents...');
+
+    try {
+      const uploadRes = await startUpload(files);
+      if (uploadRes && uploadRes.length > 0) {
+        return;
+      }
+    } catch (err) {
+      console.error('Uploadthing startUpload failed in Materials, proceeding with client fallback indexing:', err);
+    }
+
+    // Direct client processing fallback
+    const selectedCourse = courses.find((c) => c.id === uploadCourseId) || courses[0];
+    const targetExam = examMilestones.find((t) => t.id === uploadExamId);
+
+    for (const file of files) {
+      const fileName = file.name;
+      const sizeInBytes = file.size;
+      const fileSizeStr = sizeInBytes < 1024 * 1024
+        ? `${(sizeInBytes / 1024).toFixed(1)} KB`
+        : `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+      const extension = fileName.split('.').pop()?.toLowerCase() || '';
+      let fileType: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc' = 'pdf';
+      if (['pptx', 'ppt'].includes(extension)) {
+        fileType = 'slides';
+      } else if (['docx', 'doc'].includes(extension)) {
+        fileType = 'doc';
+      } else if (fileName.toLowerCase().includes('syllabus')) {
+        fileType = 'syllabus';
+      } else if (['txt', 'md', 'json'].includes(extension)) {
+        fileType = 'notes';
+      } else {
+        fileType = 'pdf';
+      }
+
+      const fileDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+      });
+
+      try {
+        const aiRes = await fetch('/api/materials/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: fileName,
+            fileName,
+            fileType,
+            courseName: selectedCourse?.name || 'General Course',
+            textContent: `Document uploaded: ${fileName}.`,
+            fileUrl: fileDataUrl.slice(0, 500),
+          }),
+        });
+        const json = await aiRes.json();
+        const aiData = json.data || {};
+
+        const newMat: CourseMaterial = {
+          id: `mat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          courseId: selectedCourse?.id || 'course-gen',
+          courseName: selectedCourse?.name || 'General',
+          linkedExamId: targetExam ? targetExam.id : undefined,
+          linkedExamTitle: targetExam ? targetExam.name : undefined,
+          title: aiData.title || fileName,
+          fileName,
+          fileType,
+          fileSizeStr,
+          pageCount: aiData.pageCount || 1,
+          uploadedAt: new Date().toISOString(),
+          topicsSummary: aiData.topicsSummary || ['Uploaded Study Material', 'Core Concepts'],
+          chapterOutline: aiData.chapterOutline || [
+            { title: 'Section 1: Overview', pageRange: 'Pages 1-10', summary: 'Core theory and concepts.' },
+          ],
+          keyFormulasAndConcepts: aiData.keyFormulasAndConcepts || [
+            { concept: 'Key Formula', formulaOrRule: 'Standard Reference', description: 'Important course definition.' },
+          ],
+          practiceProblems: aiData.practiceProblems || ['Review uploaded notes and formulas.'],
+          fileDataUrl,
+        };
+        onAddMaterial(newMat);
+      } catch (e) {
+        const fallbackMat: CourseMaterial = {
+          id: `mat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          courseId: selectedCourse?.id || 'course-gen',
+          courseName: selectedCourse?.name || 'General',
+          linkedExamId: targetExam ? targetExam.id : undefined,
+          linkedExamTitle: targetExam ? targetExam.name : undefined,
+          title: fileName,
+          fileName,
+          fileType,
+          fileSizeStr,
+          pageCount: 1,
+          uploadedAt: new Date().toISOString(),
+          topicsSummary: ['Uploaded Material', 'Lecture File'],
+          chapterOutline: [
+            { title: 'Section 1: Overview', pageRange: 'Page 1', summary: 'Content stored.' },
+          ],
+          keyFormulasAndConcepts: [
+            { concept: 'Direct Upload', formulaOrRule: fileName, description: 'File uploaded.' },
+          ],
+          practiceProblems: ['Review uploaded material.'],
+          fileDataUrl,
         };
         onAddMaterial(fallbackMat);
       }
@@ -461,33 +589,67 @@ export function Materials({
                 </p>
               </div>
             ) : (
-              <UploadDropzone
-                endpoint="courseMaterialUploader"
-                onUploadBegin={() => {
-                  setIsUploading(true);
-                  setUploadStatusMessage('Uploading document to Uploadthing...');
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
                 }}
-                onClientUploadComplete={handleUploadthingComplete}
-                onUploadError={(error: Error) => {
-                  setIsUploading(false);
-                  setUploadStatusMessage('');
-                  console.error('Upload error:', error);
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
                 }}
-                appearance={{
-                  container: 'border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 bg-slate-50/60 dark:bg-slate-800/30 rounded-xl p-6 transition-all',
-                  label: 'text-sm font-bold text-slate-800 dark:text-white',
-                  allowedContent: 'text-xs text-slate-500 dark:text-slate-400 font-medium',
-                  button: 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer ut-ready:bg-indigo-600 ut-uploading:cursor-not-allowed',
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    processFiles(Array.from(e.dataTransfer.files));
+                  }
                 }}
-                content={{
-                  label: 'Drop course documents here or click to choose files',
-                  allowedContent: 'Supports PDF, PPTX, DOCX, TXT (up to 32MB)',
-                  button({ ready }) {
-                    if (ready) return 'Choose & Upload File';
-                    return 'Preparing uploader...';
-                  },
-                }}
-              />
+                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all bg-slate-50/60 dark:bg-slate-800/30 flex flex-col items-center justify-center gap-3 ${
+                  isDragging
+                    ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 scale-[0.99]'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-indigo-500'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      processFiles(Array.from(e.target.files));
+                      e.target.value = '';
+                    }
+                  }}
+                  className="hidden"
+                  id="materials-page-file-input"
+                />
+
+                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Upload className="w-5 h-5" />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-slate-800 dark:text-white">
+                    Drop course documents here or click to choose files
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    Supports PDF, PPTX, DOCX, TXT (up to 32MB)
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  id="materials-choose-file-btn"
+                  disabled={isUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-2 active:scale-95"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Choose & Upload File</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
