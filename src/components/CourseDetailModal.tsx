@@ -130,7 +130,7 @@ export function CourseDetailModal({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-white/10 mt-2">
             {course.professor ? (
               <div className="flex items-center gap-1.5 text-xs text-white/90 font-medium">
                 <User className="w-3.5 h-3.5" />
@@ -138,7 +138,7 @@ export function CourseDetailModal({
               </div>
             ) : <div />}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-end sm:self-auto">
               <button
                 type="button"
                 onClick={() => setIsResourceHubOpen(true)}
@@ -651,6 +651,7 @@ export function CourseDetailModal({
       <CourseResourceHubModal
         isOpen={isResourceHubOpen}
         onClose={() => setIsResourceHubOpen(false)}
+        courseId={course?.id}
         course={course}
         tasks={tasks}
         materials={materials}

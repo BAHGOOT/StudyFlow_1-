@@ -26,7 +26,9 @@ import { formatDeadlineRelative } from '../utils/smartPlanner';
 interface CourseResourceHubModalProps {
   isOpen: boolean;
   onClose: () => void;
-  course: Course | null;
+  courseId?: string | null;
+  course?: Course | null;
+  courses?: Course[];
   tasks: Task[];
   materials?: CourseMaterial[];
 }
@@ -34,7 +36,9 @@ interface CourseResourceHubModalProps {
 export function CourseResourceHubModal({
   isOpen,
   onClose,
-  course,
+  courseId,
+  course: propCourse,
+  courses = [],
   tasks = [],
   materials = [],
 }: CourseResourceHubModalProps) {
@@ -42,8 +46,16 @@ export function CourseResourceHubModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedFormula, setCopiedFormula] = useState<string | null>(null);
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const [sortBy, setSortBy] = useState<'Newest' | 'Alphabetical' | 'Task Deadline'>('Newest');
 
-  if (!isOpen || !course) return null;
+  // Resolve course from courseId, courses list, or propCourse
+  const course = useMemo(() => {
+    if (propCourse) return propCourse;
+    if (courseId && courses.length > 0) {
+      return courses.find((c) => c.id === courseId) || null;
+    }
+    return propCourse || null;
+  }, [propCourse, courseId, courses]);
 
   // Safe fallback arrays
   const safeMaterials = materials || [];
@@ -51,28 +63,59 @@ export function CourseResourceHubModal({
 
   // Filter materials for this course
   const courseMaterials = useMemo(() => {
-    return safeMaterials.filter(
+    if (!course) return [];
+    const filtered = safeMaterials.filter(
       (m) =>
         m.courseId === course.id ||
         (m.courseName && m.courseName.toLowerCase() === course.name.toLowerCase())
     );
-  }, [safeMaterials, course]);
+
+    if (sortBy === 'Alphabetical') {
+      return [...filtered].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === 'Task Deadline') {
+      return [...filtered].sort((a, b) => {
+        const taskA = safeTasks.find((t) => t.id === a.linkedExamId);
+        const taskB = safeTasks.find((t) => t.id === b.linkedExamId);
+        if (taskA && taskB) {
+          return new Date(taskA.deadline).getTime() - new Date(taskB.deadline).getTime();
+        }
+        if (taskA) return -1;
+        if (taskB) return 1;
+        return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime();
+      });
+    } else {
+      return [...filtered].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+    }
+  }, [safeMaterials, course, sortBy, safeTasks]);
 
   // Filter tasks for this course
-  const courseTasks = useMemo(() => safeTasks.filter((t) => t.courseId === course.id), [safeTasks, course]);
+  const courseTasks = useMemo(() => {
+    if (!course) return [];
+    return safeTasks.filter((t) => t.courseId === course.id);
+  }, [safeTasks, course]);
 
   // Split into active upcoming vs completed graded quizzes/exams
   const activeUpcomingTasks = useMemo(() => {
-    return courseTasks
-      .filter((t) => t.status !== 'completed')
-      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
-  }, [courseTasks]);
+    const list = courseTasks.filter((t) => t.status !== 'completed');
+    if (sortBy === 'Alphabetical') {
+      return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === 'Task Deadline') {
+      return [...list].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+    } else {
+      return [...list].sort((a, b) => new Date(b.deadline).getTime() - new Date(a.deadline).getTime());
+    }
+  }, [courseTasks, sortBy]);
 
   const pastQuizExamResults = useMemo(() => {
-    return courseTasks
-      .filter((t) => t.status === 'completed' && (t.type === 'Quiz' || t.type === 'Exam' || t.achievedGrade !== undefined))
-      .sort((a, b) => new Date(b.completedAt || b.deadline).getTime() - new Date(a.completedAt || a.deadline).getTime());
-  }, [courseTasks]);
+    const list = courseTasks.filter((t) => t.status === 'completed' && (t.type === 'Quiz' || t.type === 'Exam' || t.achievedGrade !== undefined));
+    if (sortBy === 'Alphabetical') {
+      return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === 'Task Deadline') {
+      return [...list].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+    } else {
+      return [...list].sort((a, b) => new Date(b.completedAt || b.deadline).getTime() - new Date(a.completedAt || a.deadline).getTime());
+    }
+  }, [courseTasks, sortBy]);
 
   // Aggregate formulas across all course materials
   const aggregatedFormulas = useMemo(() => {
@@ -81,6 +124,7 @@ export function CourseResourceHubModal({
       formulaOrRule?: string;
       description: string;
       materialTitle: string;
+      uploadedAt?: string;
     }[] = [];
 
     courseMaterials.forEach((mat) => {
@@ -89,6 +133,7 @@ export function CourseResourceHubModal({
           formulasList.push({
             ...f,
             materialTitle: mat.title,
+            uploadedAt: mat.uploadedAt,
           });
         });
       }
@@ -142,19 +187,80 @@ export function CourseResourceHubModal({
       }
     }
 
-    if (!searchQuery.trim()) return formulasList;
-    const q = searchQuery.toLowerCase();
-    return formulasList.filter(
-      (item) =>
-        item.concept.toLowerCase().includes(q) ||
-        (item.formulaOrRule && item.formulaOrRule.toLowerCase().includes(q)) ||
-        item.description.toLowerCase().includes(q)
-    );
-  }, [courseMaterials, course, searchQuery]);
+    let filtered = formulasList;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = formulasList.filter(
+        (item) =>
+          item.concept.toLowerCase().includes(q) ||
+          (item.formulaOrRule && item.formulaOrRule.toLowerCase().includes(q)) ||
+          item.description.toLowerCase().includes(q)
+      );
+    }
+
+    if (sortBy === 'Alphabetical') {
+      return [...filtered].sort((a, b) => a.concept.localeCompare(b.concept));
+    } else if (sortBy === 'Task Deadline') {
+      return filtered;
+    } else {
+      return [...filtered].sort((a, b) => {
+        const dateA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+        const dateB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+    }
+  }, [courseMaterials, course, searchQuery, sortBy]);
 
   // Academic Grade Summary
-  const gradeSummary = calculateCourseGrade(course.id, tasks);
-  const badgeConfig = getStatusBadgeConfig(gradeSummary.statusBadge);
+  const gradeSummary = useMemo(() => {
+    if (!course) {
+      return {
+        hasGrades: false,
+        percentage: 0,
+        percentageFormatted: 'N/A',
+        totalAchievedPoints: 0,
+        totalPossiblePoints: 0,
+        gradedCount: 0,
+        pendingCount: 0,
+        letterGrade: '—',
+        statusBadge: 'On Track' as const,
+        requiresRemediation: false,
+        totalWeightRecorded: 0,
+      };
+    }
+    return calculateCourseGrade(course.id, tasks);
+  }, [course, tasks]);
+
+  const badgeConfig = useMemo(() => {
+    return getStatusBadgeConfig(gradeSummary.statusBadge);
+  }, [gradeSummary]);
+
+  if (!isOpen) return null;
+
+  if (!course) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full text-center space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800">
+          <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto animate-pulse">
+            <BookOpen className="w-6 h-6 animate-spin" />
+          </div>
+          <h3 className="font-display font-bold text-lg text-slate-900 dark:text-white">
+            Loading Resource Hub...
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Please wait while we gather materials and synthesize concepts for your course.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handlePrint = () => {
     window.print();
@@ -420,6 +526,26 @@ ${pastQuizExamResults.map((t) => `- ${t.name}: ${t.achievedGrade}/${t.maxGrade} 
               <Award className="w-3.5 h-3.5" />
               <span>Past Quiz Results ({pastQuizExamResults.length})</span>
             </button>
+          </div>
+
+          {/* Sorting Controls Bar */}
+          <div className="no-print bg-slate-50 dark:bg-slate-900/30 px-6 sm:px-8 py-3.5 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+              Customize the view order of materials, formulas, and upcoming tasks:
+            </span>
+            <div className="flex items-center gap-2">
+              <label htmlFor="resource-sort-select" className="text-xs font-bold text-slate-700 dark:text-slate-300">Sort order:</label>
+              <select
+                id="resource-sort-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-3.5 py-1.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:border-slate-300 transition-colors"
+              >
+                <option value="Newest">Newest</option>
+                <option value="Alphabetical">Alphabetical</option>
+                <option value="Task Deadline">Task Deadline</option>
+              </select>
+            </div>
           </div>
 
           {/* Printable Body Container */}
