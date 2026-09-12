@@ -18,8 +18,13 @@ import {
   Send,
   RefreshCw,
   Award,
+  Loader2,
+  FileDown,
 } from 'lucide-react';
 import { Course, CourseMaterial, MaterialOutlineTopic, MaterialFormulaConcept, Task } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../lib/firebase';
 
 interface MaterialsProps {
   courses: Course[];
@@ -38,18 +43,31 @@ export function Materials({
   onDeleteMaterial,
   onStartFocusSession,
 }: MaterialsProps) {
+  const { currentUser } = useAuth();
   const [selectedCourseId, setSelectedCourseId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCourseId, setUploadCourseId] = useState<string>(courses[0]?.id || '');
+  const [uploadExamId, setUploadExamId] = useState<string>('none');
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Filter exam milestones for linking materials
+  const examMilestones = tasks.filter(
+    (t) =>
+      t.type === 'Exam' ||
+      t.type === 'Quiz' ||
+      t.type === 'Project' ||
+      t.name.toLowerCase().includes('exam') ||
+      t.name.toLowerCase().includes('midterm')
+  );
 
   // Manual note mode
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [noteCourseId, setNoteCourseId] = useState<string>(courses[0]?.id || '');
+  const [noteExamId, setNoteExamId] = useState<string>('none');
 
   // Detail / Knowledge modal
   const [activeMaterial, setActiveMaterial] = useState<CourseMaterial | null>(null);
@@ -85,74 +103,156 @@ export function Materials({
 
   // Process file upload or indexing via AI
   const handleProcessFileAndIndex = async (
-    fileOrTitle: string,
+    fileOrTitle: File | string,
     courseId: string,
-    fileType: 'pdf' | 'slides' | 'syllabus' | 'notes',
+    passedFileType?: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc',
     textContent?: string
   ) => {
     setIsUploading(true);
     const selectedCourse = courses.find((c) => c.id === courseId) || courses[0];
+    const userId = currentUser?.uid || 'usr_demo';
 
     try {
-      // Call Express Gemini API endpoint /api/materials/index
+      let title = '';
+      let fileName = '';
+      let fileType: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc' = 'pdf';
+      let fileDataUrl = '';
+      let fileSizeStr = '2.4 MB';
+      let fileBase64 = '';
+      let rawText = textContent || '';
+
+      if (fileOrTitle instanceof File) {
+        const file = fileOrTitle;
+        title = file.name;
+        fileName = file.name;
+
+        // 1. Upload file directly to Firebase Storage under materials/{userId}/{Date.now()}_{fileName}
+        const storagePath = `materials/${userId}/${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, storagePath);
+        const uploadSnapshot = await uploadBytes(storageRef, file);
+        fileDataUrl = await getDownloadURL(uploadSnapshot.ref);
+
+        fileSizeStr = file.size < 1024 * 1024
+          ? `${(file.size / 1024).toFixed(1)} KB`
+          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+
+        const extension = file.name.split('.').pop()?.toLowerCase();
+        if (['pptx', 'ppt'].includes(extension || '')) {
+          fileType = 'slides';
+        } else if (['docx', 'doc'].includes(extension || '')) {
+          fileType = 'doc';
+        } else if (file.name.toLowerCase().includes('syllabus')) {
+          fileType = 'syllabus';
+        } else if (['txt', 'md', 'json'].includes(extension || '')) {
+          fileType = 'notes';
+          rawText = await file.text();
+        } else {
+          fileType = 'pdf';
+        }
+
+        // Convert file to Base64 for multimodal Gemini analysis (PDF or image)
+        if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+          fileBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result.split(',')[1]); // Only keep base64 data payload
+            };
+            reader.onerror = (e) => reject(e);
+            reader.readAsDataURL(file);
+          });
+        }
+      } else {
+        // Manual Note mode
+        title = fileOrTitle;
+        fileName = fileOrTitle;
+        fileType = passedFileType || 'notes';
+        fileDataUrl = 'pasted_text';
+        fileSizeStr = `${Math.round(rawText.length / 1024)} KB`;
+      }
+
+      // 3. Call Express Gemini API endpoint /api/materials/index
       const res = await fetch('/api/materials/index', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: fileOrTitle,
-          fileName: fileOrTitle,
+          title,
+          fileName,
           fileType,
           courseName: selectedCourse?.name || 'General Course',
-          textContent: textContent || noteContent || 'University Lecture Study Document',
+          textContent: rawText || `Directly uploaded file: ${title}. Raw content stored securely.`,
+          fileBase64: fileBase64 || undefined,
+          mimeType: (fileOrTitle instanceof File) ? fileOrTitle.type : 'text/plain',
         }),
       });
 
       const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'AI indexing failed');
+      }
       const aiData = json.data || {};
+
+      const targetExamId = (fileOrTitle instanceof File) ? uploadExamId : noteExamId;
+      const linkedExam = examMilestones.find((t) => t.id === targetExamId);
 
       const newMat: CourseMaterial = {
         id: `mat-${Date.now()}`,
         courseId: selectedCourse?.id || 'course-gen',
         courseName: selectedCourse?.name || 'General',
-        title: fileOrTitle,
-        fileName: fileOrTitle,
+        linkedExamId: linkedExam ? linkedExam.id : undefined,
+        linkedExamTitle: linkedExam ? linkedExam.name : undefined,
+        title,
+        fileName,
         fileType,
-        fileSizeStr: textContent ? `${Math.round(textContent.length / 1000)} KB` : '3.8 MB',
-        pageCount: aiData.pageCount || 24,
+        fileSizeStr,
+        pageCount: aiData.pageCount || 1,
         uploadedAt: new Date().toISOString(),
         topicsSummary: aiData.topicsSummary || ['Key Lecture Topics', 'Core Principles'],
         chapterOutline: aiData.chapterOutline || [
-          { title: 'Chapter 1: Foundations', pageRange: 'Pages 1–15', summary: 'Core theory and definitions.' },
+          { title: 'Chapter 1: Foundations', pageRange: 'Pages 1-15', summary: 'Core theory and definitions.' },
         ],
         keyFormulasAndConcepts: aiData.keyFormulasAndConcepts || [
           { concept: 'Key Theorem', formulaOrRule: 'f(x) = dx/dt', description: 'Fundamental rate equation.' },
         ],
         practiceProblems: aiData.practiceProblems || ['Problem 1: Apply core formulas.'],
-        fileDataUrl: textContent || noteContent,
+        fileDataUrl, // Stored URL or pasted_text tag
       };
 
       onAddMaterial(newMat);
-    } catch (err) {
+    } catch (err: any) {
       console.warn('AI Indexing fallback:', err);
       // Client fallback if offline or API error
+      const title = (fileOrTitle instanceof File) ? fileOrTitle.name : fileOrTitle;
+      const fileSizeStr = (fileOrTitle instanceof File)
+        ? (fileOrTitle.size < 1024 * 1024 ? `${(fileOrTitle.size / 1024).toFixed(1)} KB` : `${(fileOrTitle.size / (1024 * 1024)).toFixed(1)} MB`)
+        : `${Math.round((textContent || '').length / 1024)} KB`;
+
+      const targetExamId = (fileOrTitle instanceof File) ? uploadExamId : noteExamId;
+      const linkedExam = examMilestones.find((t) => t.id === targetExamId);
+
       const newMat: CourseMaterial = {
         id: `mat-${Date.now()}`,
         courseId: selectedCourse?.id || 'course-gen',
         courseName: selectedCourse?.name || 'General',
-        title: fileOrTitle,
-        fileName: fileOrTitle,
-        fileType,
-        fileSizeStr: '2.4 MB',
-        pageCount: 18,
+        linkedExamId: linkedExam ? linkedExam.id : undefined,
+        linkedExamTitle: linkedExam ? linkedExam.name : undefined,
+        title,
+        fileName: title,
+        fileType: (fileOrTitle instanceof File)
+          ? (fileOrTitle.name.endsWith('.pptx') || fileOrTitle.name.endsWith('.ppt') ? 'slides' : 'pdf')
+          : (passedFileType || 'notes'),
+        fileSizeStr,
+        pageCount: 1,
         uploadedAt: new Date().toISOString(),
-        topicsSummary: ['Core Concepts', 'Lecture Notes'],
+        topicsSummary: ['Uploaded Study Material', 'Lecture File'],
         chapterOutline: [
-          { title: 'Section 1: Overview', pageRange: 'Pages 1–10', summary: 'Foundational concepts.' },
+          { title: 'Section 1: Overview', pageRange: 'Page 1', summary: 'Content successfully uploaded.' },
         ],
         keyFormulasAndConcepts: [
-          { concept: 'Core Principle', formulaOrRule: 'A = B + C', description: 'Essential rule.' },
+          { concept: 'Direct Upload', formulaOrRule: title, description: 'File successfully stored in Firebase Storage.' },
         ],
-        practiceProblems: ['Problem 1.1: Practice question.'],
+        practiceProblems: ['Problem 1: Review uploaded content.'],
+        fileDataUrl: (fileOrTitle instanceof File) ? 'failed_index' : 'pasted_text',
       };
       onAddMaterial(newMat);
     } finally {
@@ -168,16 +268,14 @@ export function Materials({
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-      const typeStr = file.name.endsWith('.pptx') || file.name.endsWith('.ppt') ? 'slides' : 'pdf';
-      handleProcessFileAndIndex(file.name, uploadCourseId || courses[0]?.id || 'course-calc', typeStr);
+      handleProcessFileAndIndex(file, uploadCourseId || courses[0]?.id || 'course-calc');
     }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      const typeStr = file.name.endsWith('.pptx') || file.name.endsWith('.ppt') ? 'slides' : 'pdf';
-      handleProcessFileAndIndex(file.name, uploadCourseId || courses[0]?.id || 'course-calc', typeStr);
+      handleProcessFileAndIndex(file, uploadCourseId || courses[0]?.id || 'course-calc');
     }
   };
 
@@ -313,22 +411,43 @@ export function Materials({
               <Upload className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               Upload & AI Index Material
             </h2>
-            <div className="flex items-center gap-2">
-              <label htmlFor="upload-course-select" className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                Course:
-              </label>
-              <select
-                id="upload-course-select"
-                value={uploadCourseId}
-                onChange={(e) => setUploadCourseId(e.target.value)}
-                className="text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} – {c.name}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="upload-course-select" className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Course:
+                </label>
+                <select
+                  id="upload-course-select"
+                  value={uploadCourseId}
+                  onChange={(e) => setUploadCourseId(e.target.value)}
+                  className="text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code} – {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="upload-exam-select" className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                  Link Exam:
+                </label>
+                <select
+                  id="upload-exam-select"
+                  value={uploadExamId}
+                  onChange={(e) => setUploadExamId(e.target.value)}
+                  className="text-xs font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800/60 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="none">-- General Material (No specific exam) --</option>
+                  {examMilestones.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      🎯 {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -349,13 +468,13 @@ export function Materials({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.ppt,.pptx,.doc,.docx,.txt,.md"
+              accept=".pdf,.ppt,.pptx,.doc,.docx,.txt,.md,image/*"
               onChange={handleFileInputChange}
               className="hidden"
             />
             {isUploading ? (
               <div className="flex flex-col items-center justify-center py-4">
-                <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
+                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                   AI Document Indexing in Progress...
                 </p>
@@ -369,15 +488,17 @@ export function Materials({
                   <Upload className="w-6 h-6" />
                 </div>
                 <p className="text-sm font-bold text-slate-800 dark:text-white">
-                  Drop your course PDFs, slides, or syllabus here
+                  Drop your course files here or click to upload
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Supports PDF, PPTX, DOCX, TXT notes (Max 25MB)
+                  Supports PDF, PPTX, DOCX, TXT, and Images (Max 25MB)
                 </p>
-                <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs transition-colors">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  Browse Files
-                </span>
+                <div className="mt-4 flex flex-wrap gap-2.5 justify-center">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs transition-colors">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Browse Files
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -495,12 +616,19 @@ export function Materials({
                         )}
                       </div>
                       <div>
-                        <span
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white uppercase tracking-wider inline-block"
-                          style={{ backgroundColor: matchedCourse?.accentHex || '#6366f1' }}
-                        >
-                          {matchedCourse?.code || mat.courseName || 'Course'}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white uppercase tracking-wider inline-block"
+                            style={{ backgroundColor: matchedCourse?.accentHex || '#6366f1' }}
+                          >
+                            {matchedCourse?.code || mat.courseName || 'Course'}
+                          </span>
+                          {mat.linkedExamTitle && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800/60 flex items-center gap-1 truncate max-w-[140px]" title={`Linked to ${mat.linkedExamTitle}`}>
+                              🎯 {mat.linkedExamTitle}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                           {mat.pageCount ? `${mat.pageCount} Pages` : mat.fileSizeStr || '2.4 MB'}
                         </div>
@@ -517,9 +645,34 @@ export function Materials({
                   </div>
 
                   {/* Title */}
-                  <h3 className="font-display font-bold text-slate-900 dark:text-white text-base leading-snug mb-3 line-clamp-2">
+                  <h3 className="font-display font-bold text-slate-900 dark:text-white text-base leading-snug mb-2 line-clamp-2">
                     {mat.title}
                   </h3>
+
+                  {/* Exam Milestone Selector on Card */}
+                  <div className="mb-3">
+                    <select
+                      value={mat.linkedExamId || 'none'}
+                      onChange={(e) => {
+                        const newExamId = e.target.value;
+                        const linkedExam = examMilestones.find((t) => t.id === newExamId);
+                        const updatedMat = {
+                          ...mat,
+                          linkedExamId: newExamId === 'none' ? undefined : newExamId,
+                          linkedExamTitle: newExamId === 'none' ? undefined : linkedExam?.name,
+                        };
+                        onAddMaterial(updatedMat);
+                      }}
+                      className="text-[11px] font-medium bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 w-full focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="none">🔗 Link to Exam Milestone...</option>
+                      {examMilestones.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          🎯 {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   {/* AI Topics Badges */}
                   <div className="mb-4">
@@ -567,6 +720,18 @@ export function Materials({
                     <span>View Outline</span>
                   </button>
 
+                  {mat.fileDataUrl && mat.fileDataUrl.startsWith('http') && (
+                    <a
+                      href={mat.fileDataUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400 text-xs font-semibold rounded-xl flex items-center justify-center gap-1 transition-colors"
+                      title="Download/Open File"
+                    >
+                      <FileDown className="w-4 h-4" />
+                    </a>
+                  )}
+
                   <button
                     onClick={() => {
                       setActiveMaterial(mat);
@@ -585,6 +750,8 @@ export function Materials({
           })}
         </div>
       )}
+
+
 
       {/* Manual Paste Note Modal */}
       {showNoteModal && (

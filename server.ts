@@ -188,12 +188,10 @@ Return strictly valid JSON conforming to this schema:
 // AI Material Indexing & Topic Extraction Endpoint
 app.post('/api/materials/index', async (req, res) => {
   try {
-    const { title, fileName, fileType, courseName, textContent } = req.body;
+    const { title, fileName, fileType, courseName, textContent, fileBase64, mimeType } = req.body;
 
-    const prompt = `You are an expert AI academic document indexer.
+    const promptText = `You are an expert AI academic document indexer.
 Analyze the following course study document ("${title || fileName}" for course "${courseName || 'General Course'}").
-Content or excerpt:
-${textContent ? String(textContent).slice(0, 8000) : 'Standard university lecture note or course syllabus.'}
 
 Extract structured study metadata according to this exact JSON schema:
 {
@@ -218,12 +216,37 @@ Extract structured study metadata according to this exact JSON schema:
   ]
 }`;
 
+    // Construct contents parameter
+    let contentsParam: any = promptText;
+
+    if (fileBase64) {
+      const cleanData = fileBase64.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, '');
+      contentsParam = [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                data: cleanData,
+                mimeType: mimeType || 'application/pdf',
+              },
+            },
+            {
+              text: promptText,
+            },
+          ],
+        },
+      ];
+    } else if (textContent) {
+      contentsParam = `${promptText}\n\nContent or excerpt:\n${String(textContent).slice(0, 8000)}`;
+    }
+
     const ai = getAI();
     let responseText = '{}';
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: prompt,
+        contents: contentsParam,
         config: {
           responseMimeType: 'application/json',
         },
@@ -232,7 +255,7 @@ Extract structured study metadata according to this exact JSON schema:
     } catch {
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash',
-        contents: prompt,
+        contents: contentsParam,
         config: {
           responseMimeType: 'application/json',
         },

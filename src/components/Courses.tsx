@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Course, Task, PlantedTree } from '../types';
-import { Plus, BookOpen, Calendar, ArrowRight, Trash2, Eye, Award, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Course, Task, PlantedTree, CourseMaterial } from '../types';
+import { Plus, BookOpen, Calendar, ArrowRight, Trash2, Eye, Award, Sparkles, AlertTriangle, CheckCircle2, Users, GraduationCap } from 'lucide-react';
 import { formatDeadlineRelative } from '../utils/smartPlanner';
 import { CourseDetailModal } from './CourseDetailModal';
+import { StudyGroupModal } from './StudyGroupModal';
+import { CourseResourceHubModal } from './CourseResourceHubModal';
 import { calculateCourseGrade, getStatusBadgeConfig } from '../utils/gradeCalculator';
 
 interface CoursesProps {
   courses: Course[];
   tasks: Task[];
+  materials?: CourseMaterial[];
   plantedTrees?: PlantedTree[];
   onOpenAddCourse: () => void;
   onSelectCourseTasks: (courseId: string) => void;
@@ -20,6 +23,7 @@ interface CoursesProps {
 export function Courses({
   courses,
   tasks,
+  materials = [],
   plantedTrees = [],
   onOpenAddCourse,
   onSelectCourseTasks,
@@ -30,6 +34,8 @@ export function Courses({
 }: CoursesProps) {
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [selectedCourseForDetail, setSelectedCourseForDetail] = useState<Course | null>(null);
+  const [selectedCourseForStudyGroup, setSelectedCourseForStudyGroup] = useState<Course | null>(null);
+  const [selectedCourseForResourceHub, setSelectedCourseForResourceHub] = useState<Course | null>(null);
 
   // Dynamic Course stats helper
   const getCourseStats = (course: Course) => {
@@ -146,19 +152,49 @@ export function Courses({
                       </div>
                     </div>
 
-                    {onDeleteCourse && (
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                       <button
                         type="button"
+                        id={`resource-hub-btn-${course.id}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setCourseToDelete(course);
+                          setSelectedCourseForResourceHub(course);
                         }}
-                        title="Delete Course"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                        title="Printable Course Resource Hub"
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <GraduationCap className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>Resource Hub</span>
                       </button>
-                    )}
+
+                      <button
+                        type="button"
+                        id={`study-group-btn-${course.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCourseForStudyGroup(course);
+                        }}
+                        title="Course Study Group & Plan Sync"
+                        className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                      >
+                        <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>Study Group</span>
+                      </button>
+
+                      {onDeleteCourse && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCourseToDelete(course);
+                          }}
+                          title="Delete Course"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {course.professor && (
@@ -289,10 +325,28 @@ export function Courses({
         onClose={() => setSelectedCourseForDetail(null)}
         course={selectedCourseForDetail}
         tasks={tasks}
+        materials={materials}
         plantedTrees={plantedTrees}
         onStartTask={onStartTask || (() => {})}
         onToggleTaskComplete={onToggleTaskComplete || (() => {})}
         onOpenAddTaskForCourse={onOpenAddTaskForCourse || (() => {})}
+      />
+
+      {/* Study Group Modal */}
+      <StudyGroupModal
+        isOpen={Boolean(selectedCourseForStudyGroup)}
+        onClose={() => setSelectedCourseForStudyGroup(null)}
+        course={selectedCourseForStudyGroup}
+        tasks={tasks}
+      />
+
+      {/* Course Resource Hub Modal */}
+      <CourseResourceHubModal
+        isOpen={Boolean(selectedCourseForResourceHub)}
+        onClose={() => setSelectedCourseForResourceHub(null)}
+        course={selectedCourseForResourceHub}
+        tasks={tasks}
+        materials={materials}
       />
 
       {/* Delete Course Confirmation Modal */}

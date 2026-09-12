@@ -187,6 +187,24 @@ export function formatDeadlineRelative(
 }
 
 /**
+ * Detects whether a task is "At Risk":
+ * A task is "At Risk" if its deadline is within 48 hours (0 <= diffHours <= 48)
+ * AND it has not been started yet (status === 'todo').
+ */
+export function isTaskAtRisk(task: Task, currentDate: Date = new Date()): boolean {
+  if (task.status !== 'todo') return false;
+  if (!task.deadline) return false;
+
+  const deadlineDate = new Date(task.deadline);
+  if (isNaN(deadlineDate.getTime())) return false;
+
+  const now = currentDate.getTime();
+  const diffHours = (deadlineDate.getTime() - now) / (1000 * 60 * 60);
+
+  return diffHours >= 0 && diffHours <= 48;
+}
+
+/**
  * Formats minutes into human friendly string (e.g., "45 min", "1h 30m")
  */
 export function formatDuration(minutes: number): string {
@@ -455,7 +473,11 @@ export function determineOptimalRestDay(
  * Stage 1: Concept Review -> Stage 2: Problem Solving & Application -> Stage 3: Past Exams & Final Practice
  * spread over the days leading up to the deadline.
  */
-export function decomposeExamTasksInPool(tasks: Task[], courses: Course[] = []): Task[] {
+export function decomposeExamTasksInPool(
+  tasks: Task[],
+  courses: Course[] = [],
+  materials: CourseMaterial[] = []
+): Task[] {
   const resultTasks: Task[] = [];
 
   tasks.forEach((task) => {
@@ -468,7 +490,10 @@ export function decomposeExamTasksInPool(tasks: Task[], courses: Course[] = []):
       task.name.toLowerCase().includes('final');
 
     const alreadyDecomposed =
-      tasks.some((t) => t.id !== task.id && t.name.includes(task.name) && t.name.includes('Stage')) ||
+      tasks.some((t) => t.id !== task.id && t.name.includes(task.name) && (t.name.includes('Phase') || t.name.includes('Stage'))) ||
+      task.name.includes('Phase 1:') ||
+      task.name.includes('Phase 2:') ||
+      task.name.includes('Phase 3:') ||
       task.name.includes('Stage 1:') ||
       task.name.includes('Stage 2:') ||
       task.name.includes('Stage 3:');
@@ -477,49 +502,107 @@ export function decomposeExamTasksInPool(tasks: Task[], courses: Course[] = []):
       const deadlineDate = new Date(task.deadline || new Date().toISOString());
       const course = courses.find((c) => c.id === task.courseId);
 
-      // Stage 1: Concept Review (3 days before deadline)
+      // Look up all course materials linked to this exam or course
+      const linkedMats = materials.filter(
+        (m) => (m.linkedExamId && m.linkedExamId === task.id) || m.courseId === task.courseId
+      );
+      const primaryMat = linkedMats[0];
+
+      // Chapter outline or page range
+      const outline1 = primaryMat?.chapterOutline?.[0];
+      const outline2 = primaryMat?.chapterOutline?.[1];
+
+      const readingPhase1 = outline1?.pageRange
+        ? `${primaryMat?.title || 'Lecture Slides'} — ${outline1.pageRange}`
+        : primaryMat
+        ? `Read Section 4.2–4.5 in ${primaryMat.title}`
+        : `Lecture Slides + Core Textbook Sections for ${course?.name || 'Course'}`;
+
+      const targetOutcomePhase1 = outline1?.summary
+        ? `By the end of this session, you will master ${outline1.title}: ${outline1.summary}`
+        : `By the end of this session, master core theoretical concepts and lecture principles for ${task.name}.`;
+
+      const exerciseTargetPhase1 = primaryMat?.practiceProblems?.[0]
+        ? `Review concepts and initial practice questions: ${primaryMat.practiceProblems[0]}`
+        : `Complete assigned reading notes & key concept breakdown.`;
+
+      // Phase 1 (Core Ingestion): 3 days before exam
       const date1 = new Date(deadlineDate.getTime() - 3 * 86400000);
-      const stage1: Task = {
+      const phase1: Task = {
         ...task,
-        id: `${task.id}-stage-1`,
-        name: `${task.name} (Stage 1: Concept Review & Synthesis)`,
+        id: `${task.id}-phase-1`,
+        name: `${task.name} (Phase 1: Core Ingestion & Reading)`,
         estimatedMinutes: 60,
         type: 'Study',
         deadline: date1.toISOString().slice(0, 16),
-        notes: `Stage 1 of Exam Prep: Synthesize core lecture notes and outline key formulas/theories for ${course?.name || 'course'}.`,
+        notes: `Phase 1 of Exam Prep: Ingest core readings and chapter outlines for ${course?.name || 'course'}.`,
+        materialId: primaryMat?.id,
+        materialTitle: primaryMat?.title,
+        exactReading: readingPhase1,
+        targetOutcome: targetOutcomePhase1,
+        exerciseTarget: exerciseTargetPhase1,
+        keyConceptsList: primaryMat?.keyFormulasAndConcepts?.map((k) => k.concept) || primaryMat?.topicsSummary || [`${course?.name || 'Course'} Theory`],
         smartPriorityScore: Math.min(99, (task.smartPriorityScore || 80) + 5),
         urgencyReason: `Phase 1 of 3-stage exam preparation milestone.`,
       };
 
-      // Stage 2: Problem Solving & Active Recall (2 days before deadline)
+      // Phase 2 (Application & Problem Sets): 2 days before exam
+      const problemRangeText = primaryMat?.practiceProblems && primaryMat.practiceProblems.length > 0
+        ? `Solve Problems ${primaryMat.practiceProblems.slice(0, 3).join(', ')}`
+        : `Solve Problems 16.8, 16.12, and 16.15 in assigned problem sets.`;
+
+      const readingPhase2 = outline2?.pageRange
+        ? `${primaryMat?.title || 'Material'} — ${outline2.pageRange}`
+        : primaryMat
+        ? `End-of-chapter exercise sets in ${primaryMat.title}`
+        : `Assigned Problem Sets for ${course?.name || 'Course'}`;
+
+      const targetOutcomePhase2 = `By the end of this session, you will master problem-solving applications and active recall exercises for ${task.name}.`;
+
       const date2 = new Date(deadlineDate.getTime() - 2 * 86400000);
-      const stage2: Task = {
+      const phase2: Task = {
         ...task,
-        id: `${task.id}-stage-2`,
-        name: `${task.name} (Stage 2: Practice Problems & Application)`,
-        estimatedMinutes: 60,
+        id: `${task.id}-phase-2`,
+        name: `${task.name} (Phase 2: Targeted Problem Sets & Application)`,
+        estimatedMinutes: 75,
         type: 'Study',
         deadline: date2.toISOString().slice(0, 16),
-        notes: `Stage 2 of Exam Prep: Solve practice questions, active recall flashcards, and homework set reviews.`,
+        notes: `Phase 2 of Exam Prep: Solve targeted problem sets, active recall exercises, and homework reviews.`,
+        materialId: primaryMat?.id,
+        materialTitle: primaryMat?.title,
+        exactReading: readingPhase2,
+        targetOutcome: targetOutcomePhase2,
+        exerciseTarget: problemRangeText,
+        keyConceptsList: primaryMat?.topicsSummary || [`Problem Solving`, `Formula Application`],
         smartPriorityScore: Math.min(99, (task.smartPriorityScore || 80) + 8),
         urgencyReason: `Phase 2 of 3-stage exam preparation milestone.`,
       };
 
-      // Stage 3: Past Exams & Final Practice (1 day before deadline)
+      // Phase 3 (Synthesis & Past Papers): 1 day before exam
+      const formulaSummary = primaryMat?.keyFormulasAndConcepts?.[0]
+        ? `Synthesize key formulas: ${primaryMat.keyFormulasAndConcepts[0].concept} (${primaryMat.keyFormulasAndConcepts[0].formulaOrRule || 'Core Rule'})`
+        : `Synthesize key formulas and high-yield summary notes for ${task.name}.`;
+
       const date3 = new Date(deadlineDate.getTime() - 1 * 86400000);
-      const stage3: Task = {
+      const phase3: Task = {
         ...task,
-        id: `${task.id}-stage-3`,
-        name: `${task.name} (Stage 3: Past Exams & Mock Review)`,
+        id: `${task.id}-phase-3`,
+        name: `${task.name} (Phase 3: Synthesis & Past Exam Revision)`,
         estimatedMinutes: 60,
         type: task.type,
         deadline: date3.toISOString().slice(0, 16),
-        notes: `Stage 3 of Exam Prep: Timed mock test, past exam paper review, and final high-yield topic check.`,
+        notes: `Phase 3 of Exam Prep: Timed mock review, past exam papers, and formula synthesis.`,
+        materialId: primaryMat?.id,
+        materialTitle: primaryMat?.title,
+        exactReading: `High-Yield Formula Sheet & Past Exam Papers`,
+        targetOutcome: `By the end of this session: ${formulaSummary}`,
+        exerciseTarget: `Complete 1 timed mock exam paper & final formula active recall check.`,
+        keyConceptsList: primaryMat?.keyFormulasAndConcepts?.map((k) => k.concept) || [`Formula Synthesis`, `Past Papers`],
         smartPriorityScore: Math.min(99, (task.smartPriorityScore || 80) + 10),
         urgencyReason: `Final phase before exam/project deadline.`,
       };
 
-      resultTasks.push(stage1, stage2, stage3);
+      resultTasks.push(phase1, phase2, phase3);
     } else {
       resultTasks.push(task);
     }
@@ -908,8 +991,8 @@ export function generateSmartStudyPlanFromLecturesAndCourses({
     });
   }
 
-  // Decompose major exams/projects into multi-stage study milestones
-  allTasks = decomposeExamTasksInPool(allTasks, allCourses);
+  // Decompose major exams/projects into multi-stage study milestones with syllabus grounding
+  allTasks = decomposeExamTasksInPool(allTasks, allCourses, materials);
 
   // Recalculate smart priorities for all tasks with course credit awareness
   allTasks = allTasks.map((t) => {

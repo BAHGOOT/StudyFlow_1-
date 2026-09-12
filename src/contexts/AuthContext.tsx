@@ -6,6 +6,7 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   updateProfile,
+  GoogleAuthProvider,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import { initializeUserAccount } from '../services/firestoreService';
@@ -29,6 +30,7 @@ export interface StoredAccount {
 interface AuthContextType {
   currentUser: AuthUser | null;
   loading: boolean;
+  googleAccessToken: string | null;
   signInWithGoogle: () => Promise<void>;
   signIn: (email: string, pass: string, isDemo?: boolean) => Promise<void>;
   signUp: (email: string, pass: string, name: string, major?: string, university?: string, isDemo?: boolean) => Promise<void>;
@@ -74,6 +76,7 @@ function generateUserIdForEmail(email: string): string {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     // 1. Check if there is an existing locally saved student session
@@ -128,6 +131,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setGoogleAccessToken(credential.accessToken);
+      }
       if (result.user) {
         const authUser: AuthUser = {
           uid: result.user.uid,
@@ -150,6 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw popupErr;
     }
   };
+
+
 
   const signIn = async (email: string, pass: string, isDemo = false) => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -285,10 +294,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
     localStorage.removeItem(LOCAL_STORAGE_ACTIVE_USER_KEY);
     setCurrentUser(null);
+    setGoogleAccessToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, signInWithGoogle, signIn, signUp, logout }}>
+    <AuthContext.Provider value={{ currentUser, loading, googleAccessToken, signInWithGoogle, signIn, signUp, logout }}>
       {children}
     </AuthContext.Provider>
   );

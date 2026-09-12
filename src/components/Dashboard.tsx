@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Task, Course, TodayPlanItem, StudyAvailability, StudentProfile, CollegeLecture } from '../types';
+import { Task, Course, TodayPlanItem, StudyAvailability, StudentProfile, CollegeLecture, CourseMaterial } from '../types';
+import { QuickCaptureWidget } from './QuickCaptureWidget';
 import {
   Flame,
   Play,
@@ -19,14 +20,69 @@ import {
   Award,
   Info,
   Car,
+  Quote,
+  RefreshCw,
 } from 'lucide-react';
+
+const STUDY_QUOTES = [
+  {
+    quote: "Education is not the learning of facts, but the training of the mind to think.",
+    author: "Albert Einstein",
+  },
+  {
+    quote: "Nothing in life is to be feared, it is only to be understood. Now is the time to understand more, so that we may fear less.",
+    author: "Marie Curie",
+  },
+  {
+    quote: "The expert in anything was once a beginner.",
+    author: "Helen Hayes",
+  },
+  {
+    quote: "Success is the sum of small efforts, repeated day in and day out.",
+    author: "Robert Collier",
+  },
+  {
+    quote: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.",
+    author: "Aristotle",
+  },
+  {
+    quote: "The beautiful thing about learning is that no one can take it away from you.",
+    author: "B.B. King",
+  },
+  {
+    quote: "Procrastination makes easy things hard and hard things harder.",
+    author: "Mason Cooley",
+  },
+  {
+    quote: "Focus on being productive instead of busy.",
+    author: "Tim Ferriss",
+  },
+  {
+    quote: "There are no secrets to success. It is the result of preparation, hard work, and learning from failure.",
+    author: "Colin Powell",
+  },
+  {
+    quote: "It always seems impossible until it's done.",
+    author: "Nelson Mandela",
+  },
+  {
+    quote: "You don't have to be great to start, but you have to start to be great.",
+    author: "Zig Ziglar",
+  },
+  {
+    quote: "Live as if you were to die tomorrow. Learn as if you were to live forever.",
+    author: "Mahatma Gandhi",
+  },
+];
 import {
   getDoThisNowTask,
   getTodayCapacityMetrics,
   formatDeadlineRelative,
   formatDuration,
+  isTaskAtRisk,
 } from '../utils/smartPlanner';
 import { SkipTaskModal } from './SkipTaskModal';
+import { WeeklyReview } from './WeeklyReview';
 
 export interface DashboardFocusSessionInfo {
   activeTask: Task | null;
@@ -50,6 +106,7 @@ interface DashboardProps {
   availability: StudyAvailability;
   profile: StudentProfile;
   lectures?: CollegeLecture[];
+  materials?: CourseMaterial[];
   focusSession?: DashboardFocusSessionInfo;
   onMainTaskVisibilityChange?: (isVisible: boolean) => void;
   onStartTask: (task: Task) => void;
@@ -57,6 +114,7 @@ interface DashboardProps {
   onToggleTaskComplete: (taskId: string) => void;
   onTogglePlanItemComplete: (planItemId: string) => void;
   onRescheduleTask?: (taskId: string, option: 'tomorrow' | 'friday' | 'weekend' | 'next_week') => void;
+  onAddTask?: (taskData: Partial<Task>) => void;
   onNavigateToTasks: () => void;
   onNavigateToCourses: () => void;
   onNavigateToSettings: () => void;
@@ -71,6 +129,7 @@ export function Dashboard({
   availability,
   profile,
   lectures = [],
+  materials = [],
   focusSession,
   onMainTaskVisibilityChange,
   onStartTask,
@@ -78,6 +137,7 @@ export function Dashboard({
   onToggleTaskComplete,
   onTogglePlanItemComplete,
   onRescheduleTask,
+  onAddTask,
   onNavigateToTasks,
   onNavigateToCourses,
   onNavigateToSettings,
@@ -87,6 +147,22 @@ export function Dashboard({
   const [skippedTaskIds, setSkippedTaskIds] = useState<string[]>([]);
   const [taskToSkip, setTaskToSkip] = useState<Task | null>(null);
   const [rescheduleNotice, setRescheduleNotice] = useState<string | null>(null);
+
+  // Quote of the day state calculation based on day of year
+  const getInitialQuoteIndex = () => {
+    const today = new Date();
+    const dayOfYear = Math.floor(
+      (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000
+    );
+    return dayOfYear % STUDY_QUOTES.length;
+  };
+
+  const [quoteIndex, setQuoteIndex] = useState(getInitialQuoteIndex);
+  const currentQuote = STUDY_QUOTES[quoteIndex] || STUDY_QUOTES[0];
+
+  const handleNextQuote = () => {
+    setQuoteIndex((prev) => (prev + 1) % STUDY_QUOTES.length);
+  };
 
   const mainTaskHeroRef = useRef<HTMLDivElement | null>(null);
 
@@ -186,6 +262,7 @@ export function Dashboard({
   });
 
   const maxWorkloadHours = Math.max(...courseWorkloadMap.map((c) => c.hours), 10);
+  const atRiskTasks = tasks.filter((t) => isTaskAtRisk(t));
 
   return (
     <div className="space-y-8 pb-16">
@@ -199,41 +276,117 @@ export function Dashboard({
       />
 
       {/* Header section */}
-      <div id="dashboard-header" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-slate-900 tracking-tight">
-            {timeGreeting}, {profile.name} 👋
-          </h1>
-          <p className="text-slate-500 text-sm sm:text-base mt-1 font-medium">
-            “Let’s make progress on your semester.”
-          </p>
-        </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-          {onOpenCollegeSchedule && (
-            <button
-              onClick={onOpenCollegeSchedule}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors shadow-2xs"
-            >
-              <Car className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Timetable & Commute</span>
-            </button>
-          )}
+      <div id="dashboard-header" className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-slate-900 tracking-tight">
+              {timeGreeting}, {profile.name} 👋
+            </h1>
+            <p className="text-slate-500 text-sm sm:text-base mt-1 font-medium">
+              Let’s make steady progress on your semester goals today.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {onOpenCollegeSchedule && (
+              <button
+                onClick={onOpenCollegeSchedule}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors shadow-2xs cursor-pointer"
+              >
+                <Car className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Timetable & Commute</span>
+              </button>
+            )}
 
-          {onNavigateToForest && (
-            <button
-              onClick={onNavigateToForest}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors shadow-2xs"
-            >
-              <Trees className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Forest Grove 🌲</span>
-            </button>
-          )}
+            {onNavigateToForest && (
+              <button
+                onClick={onNavigateToForest}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors shadow-2xs cursor-pointer"
+              >
+                <Trees className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Forest Grove 🌲</span>
+              </button>
+            )}
 
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Week 3 • Fall 2026</span>
-          </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Week 3 • Fall 2026</span>
+            </span>
+          </div>
         </div>
+
+        {/* Inspirational Study Quote of the Day Banner */}
+        <div
+          id="quote-of-the-day-banner"
+          className="p-4 sm:p-4.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-purple-500/10 border border-amber-200/80 dark:border-amber-800/40 relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-2xs transition-all"
+        >
+          <div className="flex items-start gap-3.5 min-w-0">
+            <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-xs shrink-0 mt-0.5">
+              <Quote className="w-4 h-4 fill-current" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 dark:text-amber-300 bg-amber-100/90 dark:bg-amber-900/60 px-2 py-0.5 rounded-md">
+                  💡 Study Quote of the Day
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 italic leading-relaxed">
+                “{currentQuote.quote}”
+              </p>
+              <p className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300">
+                — {currentQuote.author}
+              </p>
+            </div>
+          </div>
+
+          <button
+            id="refresh-quote-btn"
+            type="button"
+            onClick={handleNextQuote}
+            className="self-end sm:self-center px-3 py-1.5 rounded-xl bg-white/90 dark:bg-slate-800/90 hover:bg-white dark:hover:bg-slate-800 border border-slate-200/90 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold transition-all shrink-0 flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+            title="Shuffle motivational quote"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>New Quote</span>
+          </button>
+        </div>
+
+        {/* At Risk Tasks Notification Callout */}
+        {atRiskTasks.length > 0 && (
+          <div
+            id="dashboard-at-risk-banner"
+            className="p-4 rounded-2xl bg-rose-500/10 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 text-rose-950 dark:text-rose-100 shadow-2xs transition-all"
+          >
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="p-2.5 bg-rose-600 text-white rounded-xl shrink-0 shadow-xs mt-0.5">
+                <AlertTriangle className="w-5 h-5 stroke-[2.5]" />
+              </div>
+              <div className="min-w-0 space-y-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-extrabold text-sm text-rose-900 dark:text-rose-100">
+                    ⚠️ {atRiskTasks.length} {atRiskTasks.length === 1 ? 'Task is' : 'Tasks are'} At Risk!
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-200 dark:bg-rose-900/80 text-rose-900 dark:text-rose-100 text-[10px] font-extrabold uppercase tracking-wider">
+                    Not Started • Due in &lt; 48 Hours
+                  </span>
+                </div>
+                <p className="text-xs text-rose-800 dark:text-rose-300 font-medium leading-relaxed">
+                  {atRiskTasks.length === 1
+                    ? `"${atRiskTasks[0].name}" is due within 48 hours and hasn't been started yet.`
+                    : `${atRiskTasks.length} tasks have deadlines within 48 hours and haven't been started yet.`}
+                </p>
+              </div>
+            </div>
+            <button
+              id="dashboard-view-at-risk-btn"
+              type="button"
+              onClick={onNavigateToTasks}
+              className="self-end sm:self-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all shrink-0 cursor-pointer active:scale-95 flex items-center gap-1.5"
+            >
+              <span>View At Risk Tasks ({atRiskTasks.length})</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {rescheduleNotice && (
@@ -743,6 +896,14 @@ export function Dashboard({
             )}
             </div>
           </div>
+
+          {/* Quick Capture Widget for jotting down spontaneous ideas or lecture takeaways */}
+          <QuickCaptureWidget
+            courses={courses}
+            materials={materials}
+            onAddTask={onAddTask}
+            onNavigateToTasks={onNavigateToTasks}
+          />
         </div>
 
         {/* ========================================================================= */}
@@ -948,6 +1109,11 @@ export function Dashboard({
           </section>
         </div>
       </div>
+
+      {/* Weekly Review Section */}
+      <section id="dashboard-weekly-review-section">
+        <WeeklyReview tasks={tasks} profile={profile} todayPlan={todayPlan} />
+      </section>
     </div>
   );
 }

@@ -14,8 +14,14 @@ import {
   Maximize2,
   Timer,
   Award,
+  BookOpen,
+  Target,
+  CheckSquare,
+  CheckCircle2,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
-import { formatDeadlineRelative, formatDuration } from '../utils/smartPlanner';
+import { formatDeadlineRelative, formatDuration, isTaskAtRisk } from '../utils/smartPlanner';
 
 interface MyTasksProps {
   tasks: Task[];
@@ -23,13 +29,15 @@ interface MyTasksProps {
   onStartTask: (task: Task) => void;
   onToggleComplete: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  onBulkCompleteTasks?: (taskIds: string[]) => void;
+  onBulkDeleteTasks?: (taskIds: string[]) => void;
   onOpenAddTask: () => void;
   activeTaskId?: string;
   onExpandSession?: () => void;
   onOpenScorePrompt?: (task: Task) => void;
 }
 
-type FilterOption = 'All' | 'Today' | 'Upcoming' | 'Overdue' | 'Completed';
+type FilterOption = 'All' | 'At Risk' | 'Today' | 'Upcoming' | 'Overdue' | 'Completed';
 type SortOption = 'Priority' | 'Deadline' | 'Course' | 'Estimated time';
 type GroupingOption = 'none' | 'course' | 'dueDate';
 
@@ -84,6 +92,8 @@ export function MyTasks({
   onStartTask,
   onToggleComplete,
   onDeleteTask,
+  onBulkCompleteTasks,
+  onBulkDeleteTasks,
   onOpenAddTask,
   activeTaskId,
   onExpandSession,
@@ -93,6 +103,51 @@ export function MyTasks({
   const [activeFilter, setActiveFilter] = useState<FilterOption>('All');
   const [activeSort, setActiveSort] = useState<SortOption>('Priority');
   const [groupingMode, setGroupingMode] = useState<GroupingOption>('none');
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+
+  const handleToggleSelectTask = (taskId: string) => {
+    setSelectedTaskIds((prev) =>
+      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const visibleIds = filteredTasks.map((t) => t.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedTaskIds.includes(id));
+    if (allSelected) {
+      setSelectedTaskIds([]);
+    } else {
+      setSelectedTaskIds(Array.from(new Set([...selectedTaskIds, ...visibleIds])));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedTaskIds([]);
+    setIsSelectionMode(false);
+  };
+
+  const handleBulkComplete = () => {
+    if (selectedTaskIds.length === 0) return;
+    if (onBulkCompleteTasks) {
+      onBulkCompleteTasks(selectedTaskIds);
+    } else {
+      selectedTaskIds.forEach((id) => onToggleComplete(id));
+    }
+    setSelectedTaskIds([]);
+    setIsSelectionMode(false);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTaskIds.length === 0) return;
+    if (onBulkDeleteTasks) {
+      onBulkDeleteTasks(selectedTaskIds);
+    } else {
+      selectedTaskIds.forEach((id) => onDeleteTask(id));
+    }
+    setSelectedTaskIds([]);
+    setIsSelectionMode(false);
+  };
 
   const getCourse = (courseId: string) => courses.find((c) => c.id === courseId);
 
@@ -114,6 +169,9 @@ export function MyTasks({
         const relative = formatDeadlineRelative(task.deadline);
         if (activeFilter === 'Completed') {
           return task.status === 'completed';
+        }
+        if (activeFilter === 'At Risk') {
+          return isTaskAtRisk(task);
         }
         if (activeFilter === 'Today') {
           return task.status !== 'completed' && relative.text === 'Today';
@@ -149,6 +207,7 @@ export function MyTasks({
   const filterCounts = useMemo(() => {
     return {
       All: tasks.length,
+      'At Risk': tasks.filter((t) => isTaskAtRisk(t)).length,
       Today: tasks.filter((t) => t.status !== 'completed' && formatDeadlineRelative(t.deadline).text === 'Today').length,
       Upcoming: tasks.filter((t) => t.status !== 'completed' && formatDeadlineRelative(t.deadline).text !== 'Overdue').length,
       Overdue: tasks.filter((t) => t.status !== 'completed' && formatDeadlineRelative(t.deadline).text === 'Overdue').length,
@@ -180,39 +239,90 @@ export function MyTasks({
     const isCompleted = task.status === 'completed';
     const relative = formatDeadlineRelative(task.deadline);
     const priority = getSmartPriorityLevel(task.smartPriorityScore);
+    const isTaskSelected = selectedTaskIds.includes(task.id);
+    const atRisk = isTaskAtRisk(task);
 
     return (
       <div
         key={task.id}
         id={`task-card-${task.id}`}
-        className={`group relative p-4 sm:p-5 rounded-2xl border bg-white transition-all duration-150 ${
-          isCompleted
+        onClick={(e) => {
+          if (isSelectionMode) {
+            const targetEl = e.target as HTMLElement;
+            if (!targetEl.closest('button')) {
+              handleToggleSelectTask(task.id);
+            }
+          }
+        }}
+        className={`group relative p-4 sm:p-5 rounded-2xl border transition-all duration-150 ${
+          isSelectionMode ? 'cursor-pointer' : ''
+        } ${
+          isTaskSelected
+            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/30'
+            : isCompleted
             ? 'border-slate-200 bg-slate-50/60 opacity-75'
-            : 'border-slate-200/90 hover:border-indigo-200 hover:shadow-xs'
+            : atRisk
+            ? 'border-rose-300 dark:border-rose-800 bg-rose-50/40 dark:bg-rose-950/20 hover:border-rose-400 hover:shadow-xs ring-1 ring-rose-300/40'
+            : 'border-slate-200/90 bg-white hover:border-indigo-200 hover:shadow-xs'
         }`}
       >
         {/* Color-coded priority edge indicator strip */}
         <div
           className={`absolute left-0 top-3.5 bottom-3.5 w-1 rounded-r-md transition-colors ${
-            isCompleted ? 'bg-slate-300' : priority.stripClass
+            isTaskSelected
+              ? 'bg-indigo-600'
+              : isCompleted
+              ? 'bg-slate-300'
+              : atRisk
+              ? 'bg-rose-600 animate-pulse'
+              : priority.stripClass
           }`}
-          title={`Priority: ${priority.level} (${task.smartPriorityScore}/99)`}
+          title={atRisk ? 'AT RISK: Due in < 48 hours & Not Started' : `Priority: ${priority.level} (${task.smartPriorityScore}/99)`}
         />
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pl-1.5">
-          {/* Left: Checkbox + Info */}
+          {/* Left: Checkboxes + Info */}
           <div className="flex items-start gap-3.5 min-w-0">
-            {/* Checkbox */}
+            {/* Selection Checkbox (Visible in selection mode) */}
+            {isSelectionMode && (
+              <button
+                type="button"
+                id={`task-select-checkbox-${task.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleSelectTask(task.id);
+                }}
+                className={`mt-1 w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                  isTaskSelected
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-2xs'
+                    : 'border-slate-300 hover:border-indigo-400 bg-white'
+                }`}
+                aria-label="Select task"
+                title="Select task"
+              >
+                {isTaskSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+              </button>
+            )}
+
+            {/* Standard Completion Checkbox */}
             <button
               type="button"
               id={`task-check-${task.id}`}
-              onClick={() => onToggleComplete(task.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isSelectionMode) {
+                  handleToggleSelectTask(task.id);
+                } else {
+                  onToggleComplete(task.id);
+                }
+              }}
               className={`mt-1 w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 cursor-pointer ${
                 isCompleted
                   ? 'bg-emerald-600 border-emerald-600 text-white'
                   : 'border-slate-300 hover:border-indigo-500 bg-white'
               }`}
               aria-label="Toggle completed"
+              title={isSelectionMode ? 'Click to select task' : 'Toggle completed'}
             >
               {isCompleted && <Check className="w-3.5 h-3.5 stroke-[3]" />}
             </button>
@@ -234,6 +344,18 @@ export function MyTasks({
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
                   {task.type}
                 </span>
+
+                {/* At Risk Alert Badge */}
+                {atRisk && (
+                  <span
+                    id={`task-at-risk-badge-${task.id}`}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-600 text-white shadow-2xs animate-pulse"
+                    title="At Risk: Due within 48 hours and has not been started yet!"
+                  >
+                    <AlertTriangle className="w-3 h-3 stroke-[2.5]" />
+                    <span>⚠️ AT RISK (&lt; 48h)</span>
+                  </span>
+                )}
 
                 {/* Unified Merged Priority Level & Score Badge */}
                 <span
@@ -293,6 +415,30 @@ export function MyTasks({
               >
                 {simplifyTaskTitle(task.name)}
               </h3>
+
+              {/* Syllabus Grounding Session Details */}
+              {(task.exactReading || task.exerciseTarget || task.targetOutcome) && !task.isRemedial && (
+                <div className="py-2 px-3 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/60 text-xs text-indigo-950 dark:text-indigo-200 flex flex-col gap-1 my-1">
+                  {task.exactReading && (
+                    <div className="flex items-center gap-1.5 font-semibold text-indigo-900 dark:text-indigo-200">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <span>{task.exactReading}</span>
+                    </div>
+                  )}
+                  {task.exerciseTarget && (
+                    <div className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                      <Target className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span>{task.exerciseTarget}</span>
+                    </div>
+                  )}
+                  {task.targetOutcome && (
+                    <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 text-[11px]">
+                      <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span className="truncate">{task.targetOutcome}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Remedial Objective Banner */}
               {task.isRemedial && (
@@ -419,14 +565,38 @@ export function MyTasks({
             Smart academic task workload prioritized by deadline, difficulty, and study capacity.
           </p>
         </div>
-        <button
-          id="add-task-header-btn"
-          onClick={onOpenAddTask}
-          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition-all active:scale-95"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>Add Task</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+          <button
+            id="toggle-selection-mode-btn"
+            type="button"
+            onClick={() => {
+              setIsSelectionMode((prev) => !prev);
+              if (isSelectionMode) setSelectedTaskIds([]);
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
+              isSelectionMode
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-2xs'
+            }`}
+          >
+            <CheckSquare className="w-4 h-4" />
+            <span>{isSelectionMode ? 'Exit Selection' : 'Selection Mode'}</span>
+            {selectedTaskIds.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-white text-indigo-900 text-[10px] font-extrabold font-mono">
+                {selectedTaskIds.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            id="add-task-header-btn"
+            onClick={onOpenAddTask}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition-all active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Add Task</span>
+          </button>
+        </div>
       </div>
 
       {/* Workload Summary Card */}
@@ -524,6 +694,43 @@ export function MyTasks({
         </div>
       </div>
 
+      {/* At Risk Tasks Notification Banner */}
+      {filterCounts['At Risk'] > 0 && (
+        <div
+          id="at-risk-notification-banner"
+          className="p-4 sm:p-4.5 rounded-2xl bg-rose-500/10 dark:bg-rose-950/40 border border-rose-300/90 dark:border-rose-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 text-rose-950 dark:text-rose-100 shadow-2xs transition-all"
+        >
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="p-2.5 bg-rose-600 text-white rounded-xl shrink-0 shadow-xs mt-0.5">
+              <AlertTriangle className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-sm text-rose-900 dark:text-rose-100">
+                  ⚠️ {filterCounts['At Risk']} {filterCounts['At Risk'] === 1 ? 'Task is' : 'Tasks are'} At Risk!
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-rose-200 dark:bg-rose-900/80 text-rose-900 dark:text-rose-100 text-[10px] font-extrabold uppercase tracking-wider">
+                  Not Started • Due in &lt; 48 Hours
+                </span>
+              </div>
+              <p className="text-xs text-rose-800 dark:text-rose-300 font-medium leading-relaxed">
+                {filterCounts['At Risk'] === 1
+                  ? 'This task has a deadline within 48 hours but has not been started yet. Launch a focus session to prevent last-minute stress!'
+                  : 'These tasks have deadlines within 48 hours but have not been started yet. Launch focus sessions to keep your semester on schedule!'}
+              </p>
+            </div>
+          </div>
+          <button
+            id="view-at-risk-tasks-banner-btn"
+            type="button"
+            onClick={() => setActiveFilter('At Risk')}
+            className="self-end sm:self-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all shrink-0 cursor-pointer active:scale-95 flex items-center gap-1.5"
+          >
+            <span>Filter At Risk ({filterCounts['At Risk']})</span>
+          </button>
+        </div>
+      )}
+
       {/* Search, Filter bar & Sort */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
@@ -575,24 +782,34 @@ export function MyTasks({
 
         {/* Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {(['All', 'Today', 'Upcoming', 'Overdue', 'Completed'] as FilterOption[]).map((filter) => {
+          {(['All', 'At Risk', 'Today', 'Upcoming', 'Overdue', 'Completed'] as FilterOption[]).map((filter) => {
             const count = filterCounts[filter];
             const isActive = activeFilter === filter;
+            const isAtRiskTab = filter === 'At Risk';
             return (
               <button
                 key={filter}
-                id={`filter-tab-${filter.toLowerCase()}`}
+                id={`filter-tab-${filter.toLowerCase().replace(/\s+/g, '-')}`}
                 onClick={() => setActiveFilter(filter)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
                   isActive
-                    ? 'bg-slate-900 text-white shadow-xs'
+                    ? isAtRiskTab
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-slate-900 text-white shadow-xs'
+                    : isAtRiskTab && count > 0
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-extrabold'
                     : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/70'
                 }`}
               >
+                {isAtRiskTab && <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
                 <span>{filter}</span>
                 <span
                   className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                    isActive
+                      ? 'bg-white/20 text-white'
+                      : isAtRiskTab && count > 0
+                      ? 'bg-rose-200 text-rose-900 font-bold'
+                      : 'bg-slate-200 text-slate-600'
                   }`}
                 >
                   {count}
@@ -618,6 +835,81 @@ export function MyTasks({
           </span>
         </div>
       </div>
+
+      {/* Bulk Action Toolbar Banner */}
+      {(isSelectionMode || selectedTaskIds.length > 0) && (
+        <div
+          id="bulk-actions-banner"
+          className="p-4 bg-slate-900 text-white rounded-2xl shadow-lg border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in"
+        >
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+            <button
+              id="bulk-select-all-btn"
+              type="button"
+              onClick={handleSelectAll}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-extrabold text-white border border-slate-700 transition-colors cursor-pointer"
+            >
+              <div
+                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                  filteredTasks.length > 0 && filteredTasks.every((t) => selectedTaskIds.includes(t.id))
+                    ? 'bg-indigo-500 border-indigo-500 text-white'
+                    : 'border-slate-400 bg-slate-900'
+                }`}
+              >
+                {filteredTasks.length > 0 && filteredTasks.every((t) => selectedTaskIds.includes(t.id)) && (
+                  <Check className="w-3 h-3 stroke-[3]" />
+                )}
+              </div>
+              <span>
+                {filteredTasks.length > 0 && filteredTasks.every((t) => selectedTaskIds.includes(t.id))
+                  ? 'Deselect All'
+                  : `Select All (${filteredTasks.length})`}
+              </span>
+            </button>
+
+            <div className="text-xs font-bold text-slate-300">
+              <span className="text-white font-black text-sm mr-1 font-mono">
+                {selectedTaskIds.length}
+              </span>
+              selected
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
+            <button
+              id="bulk-complete-tasks-btn"
+              type="button"
+              disabled={selectedTaskIds.length === 0}
+              onClick={handleBulkComplete}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+            >
+              <CheckCircle2 className="w-4 h-4 text-slate-950" />
+              <span>Mark Complete ({selectedTaskIds.length})</span>
+            </button>
+
+            <button
+              id="bulk-delete-tasks-btn"
+              type="button"
+              disabled={selectedTaskIds.length === 0}
+              onClick={handleBulkDelete}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+            >
+              <Trash2 className="w-4 h-4 text-white" />
+              <span>Delete Selected ({selectedTaskIds.length})</span>
+            </button>
+
+            <button
+              id="cancel-selection-mode-btn"
+              type="button"
+              onClick={handleClearSelection}
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+              title="Close Selection Mode"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Task Cards List / Grouped List */}
       <div className="space-y-6">

@@ -19,10 +19,15 @@ import {
   ArrowRight,
   CalendarCheck,
   AlertCircle,
+  AlertTriangle,
   Play,
   GripVertical,
+  Download,
+  Brain,
+  RefreshCw,
 } from 'lucide-react';
 import { formatDuration } from '../utils/smartPlanner';
+import { downloadCalendarIcsFile } from '../utils/calendarExporter';
 
 interface PlannerProps {
   weeklyPlan: PlannedSession[];
@@ -171,12 +176,34 @@ export function Planner({
     };
   };
 
+  // Calculate overload info for a given day
+  const getDayOverloadInfo = (day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => {
+    const sessions = weeklyPlan.filter((s) => s.day === day);
+    const plannedMins = sessions.reduce((acc, s) => acc + s.durationMinutes, 0);
+    const plannedHrs = Math.round((plannedMins / 60) * 10) / 10;
+    const cap = availability.dailyHours[day] ?? 2;
+    const lecStats = getDayLectureStats(day);
+    const lecHrs = lecStats.hours;
+    const netCapHrs = Math.max(0, Math.round((cap - lecHrs) * 10) / 10);
+    const isOverloaded = plannedHrs > netCapHrs + 0.1 || (plannedHrs + lecHrs > 8 && plannedHrs > cap);
+
+    return {
+      plannedHrs,
+      cap,
+      lecHrs,
+      netCapHrs,
+      isOverloaded,
+      excessHrs: Math.round((plannedHrs - netCapHrs) * 10) / 10,
+    };
+  };
+
   // Get sessions for selected day
   const daySessions = weeklyPlan.filter((s) => s.day === selectedDay);
   const dayCapacity = availability.dailyHours[selectedDay] ?? 2;
   const dayPlannedMinutes = daySessions.reduce((acc, s) => acc + s.durationMinutes, 0);
   const dayLectureStats = getDayLectureStats(selectedDay);
   const selectedDayLectures = getDayLectures(selectedDay);
+  const selectedDayOverload = getDayOverloadInfo(selectedDay);
 
   // Month summary metrics
   const totalWeeklyCapacity = Object.values(availability.dailyHours).reduce((a, b) => a + b, 0);
@@ -203,6 +230,21 @@ export function Planner({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Export to Calendar Button */}
+          <button
+            id="export-calendar-ics-btn"
+            type="button"
+            onClick={() => {
+              downloadCalendarIcsFile(weeklyPlan, tasks, courses, lectures);
+              setFeedbackToast('Exported academic schedule to studyflow_academic_schedule.ics! Double-click to import into iCal or Google Calendar.');
+              setTimeout(() => setFeedbackToast(null), 5000);
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Export to iCal / Google Calendar</span>
+          </button>
+
           {onOpenCollegeSchedule && (
             <button
               type="button"
@@ -356,6 +398,7 @@ export function Planner({
                 const isToday = day === currentDayOfWeekName;
                 const count = weeklyPlan.filter((s) => s.day === day).length;
                 const lecCount = getDayLectures(day).length;
+                const overload = getDayOverloadInfo(day);
 
                 return (
                   <button
@@ -378,7 +421,7 @@ export function Planner({
                     </span>
 
                     {/* Indicators */}
-                    <div className="flex items-center gap-1 mt-1">
+                    <div className="flex items-center gap-1 mt-1 flex-wrap justify-center">
                       {count > 0 && (
                         <span
                           className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
@@ -400,6 +443,14 @@ export function Planner({
                           title={`${lecCount} college classes`}
                         >
                           🏛️ {lecCount}
+                        </span>
+                      )}
+                      {overload.isOverloaded && (
+                        <span
+                          className="text-[9px] font-extrabold px-1 py-0.2 rounded-full bg-rose-500 text-white animate-pulse"
+                          title={`Overload Risk: ${overload.plannedHrs}h planned exceeds net capacity (${overload.netCapHrs}h)`}
+                        >
+                          ⚠️ Risk
                         </span>
                       )}
                     </div>
@@ -464,6 +515,40 @@ export function Planner({
               </div>
             </div>
           </div>
+
+          {/* Overload Risk Warning Banner & Rebalance CTA */}
+          {selectedDayOverload.isOverloaded && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-50 via-rose-100/60 to-amber-50 border-2 border-rose-300 dark:border-rose-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-rose-500 text-white rounded-xl shadow-xs shrink-0 mt-0.5">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-sm text-rose-950 dark:text-rose-100">
+                      Overload Risk Detected on {selectedDay}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white uppercase tracking-wider">
+                      +{selectedDayOverload.excessHrs}h Excess
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-900/90 dark:text-rose-200 mt-1 leading-relaxed">
+                    Planned study time ({selectedDayOverload.plannedHrs}h) exceeds your net available study capacity ({selectedDayOverload.netCapHrs}h) after accounting for {selectedDayOverload.lecHrs}h of college lectures.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={isRegenerating}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-sm shrink-0 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
+                <span>Rebalance Schedule</span>
+              </button>
+            </div>
+          )}
 
           {/* ========================================================================= */}
           {/* TOP BANNER: SEPARATE FIXED COLLEGE CLASSES                                */}

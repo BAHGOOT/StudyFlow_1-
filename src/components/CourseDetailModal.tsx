@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Course, Task, PlantedTree } from '../types';
+import { Course, Task, PlantedTree, CourseMaterial } from '../types';
 import {
   X,
   BookOpen,
@@ -13,16 +13,25 @@ import {
   Sparkles,
   TrendingUp,
   User,
+  Brain,
+  Search,
+  Copy,
+  Check,
+  Users,
+  GraduationCap,
 } from 'lucide-react';
 import { formatDeadlineRelative, formatDuration } from '../utils/smartPlanner';
 import { simplifyTaskTitle, getSmartPriorityLevel } from './MyTasks';
 import { calculateCourseGrade, getStatusBadgeConfig } from '../utils/gradeCalculator';
+import { StudyGroupModal } from './StudyGroupModal';
+import { CourseResourceHubModal } from './CourseResourceHubModal';
 
 interface CourseDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   course: Course | null;
   tasks: Task[];
+  materials?: CourseMaterial[];
   plantedTrees?: PlantedTree[];
   onStartTask: (task: Task) => void;
   onToggleTaskComplete: (taskId: string) => void;
@@ -34,12 +43,17 @@ export function CourseDetailModal({
   onClose,
   course,
   tasks,
+  materials = [],
   plantedTrees = [],
   onStartTask,
   onToggleTaskComplete,
   onOpenAddTaskForCourse,
 }: CourseDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'active' | 'milestones' | 'completed'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'milestones' | 'completed' | 'formulas'>('active');
+  const [formulaSearch, setFormulaSearch] = useState('');
+  const [copiedFormula, setCopiedFormula] = useState<string | null>(null);
+  const [isStudyGroupOpen, setIsStudyGroupOpen] = useState(false);
+  const [isResourceHubOpen, setIsResourceHubOpen] = useState(false);
 
   if (!isOpen || !course) return null;
 
@@ -116,12 +130,34 @@ export function CourseDetailModal({
             </div>
           </div>
 
-          {course.professor && (
-            <div className="flex items-center gap-1.5 text-xs text-white/90 font-medium">
-              <User className="w-3.5 h-3.5" />
-              <span>Instructor: {course.professor}</span>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            {course.professor ? (
+              <div className="flex items-center gap-1.5 text-xs text-white/90 font-medium">
+                <User className="w-3.5 h-3.5" />
+                <span>Instructor: {course.professor}</span>
+              </div>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsResourceHubOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              >
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Resource Hub</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsStudyGroupOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/30 active:scale-95"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Study Group</span>
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Content Body */}
@@ -293,6 +329,20 @@ export function CourseDetailModal({
               >
                 Completed ({completedTasks.length})
               </button>
+
+              <button
+                type="button"
+                id="course-formula-sheet-tab"
+                onClick={() => setActiveTab('formulas')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'formulas'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Brain className="w-3.5 h-3.5" />
+                <span>Formula Sheet</span>
+              </button>
             </div>
 
             <button
@@ -458,6 +508,122 @@ export function CourseDetailModal({
                 ))
               )
             )}
+
+            {activeTab === 'formulas' && (() => {
+              const courseMaterials = materials.filter((m) => m.courseId === course.id);
+              const allFormulas = courseMaterials.flatMap((m) =>
+                (m.keyFormulasAndConcepts || []).map((f) => ({
+                  ...f,
+                  sourceTitle: m.title || m.fileName,
+                }))
+              );
+
+              // Also include any concepts defined on tasks
+              courseTasks.forEach((t) => {
+                if (t.keyConceptsList) {
+                  t.keyConceptsList.forEach((concept) => {
+                    if (!allFormulas.some((f) => f.concept === concept)) {
+                      allFormulas.push({
+                        concept,
+                        formulaOrRule: '',
+                        description: `Key concept for ${t.name}`,
+                        sourceTitle: t.name,
+                      });
+                    }
+                  });
+                }
+              });
+
+              const filteredFormulas = allFormulas.filter(
+                (f) =>
+                  f.concept.toLowerCase().includes(formulaSearch.toLowerCase()) ||
+                  f.formulaOrRule?.toLowerCase().includes(formulaSearch.toLowerCase()) ||
+                  f.description?.toLowerCase().includes(formulaSearch.toLowerCase())
+              );
+
+              return (
+                <div className="space-y-4">
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Search formulas, laws, constants..."
+                      value={formulaSearch}
+                      onChange={(e) => setFormulaSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  {filteredFormulas.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                      <Brain className="w-8 h-8 text-amber-500 mx-auto" />
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        No formulas extracted yet for {course.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                        Upload lecture slides or textbook PDFs in the Materials tab to automatically extract high-yield formulas, constants, and theorem sheets!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {filteredFormulas.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="p-4 bg-gradient-to-br from-amber-50/50 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/20 rounded-2xl border border-amber-200/80 dark:border-amber-800/40 space-y-2 shadow-2xs"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded-md">
+                                {item.sourceTitle}
+                              </span>
+                              <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                                {item.concept}
+                              </h4>
+                            </div>
+
+                            {item.formulaOrRule && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (item.formulaOrRule) {
+                                    navigator.clipboard.writeText(item.formulaOrRule);
+                                    setCopiedFormula(item.formulaOrRule);
+                                    setTimeout(() => setCopiedFormula(null), 2000);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white text-xs flex items-center gap-1 cursor-pointer"
+                                title="Copy formula"
+                              >
+                                {copiedFormula === item.formulaOrRule ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {item.formulaOrRule && (
+                            <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-amber-200/50 dark:border-amber-900/50">
+                              <code className="text-xs sm:text-sm font-mono font-bold text-amber-700 dark:text-amber-300 block">
+                                {item.formulaOrRule}
+                              </code>
+                            </div>
+                          )}
+
+                          {item.description && (
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -472,6 +638,23 @@ export function CourseDetailModal({
           </button>
         </div>
       </div>
+
+      {/* Study Group Sync Modal */}
+      <StudyGroupModal
+        isOpen={isStudyGroupOpen}
+        onClose={() => setIsStudyGroupOpen(false)}
+        course={course}
+        tasks={tasks}
+      />
+
+      {/* Course Resource Hub Modal */}
+      <CourseResourceHubModal
+        isOpen={isResourceHubOpen}
+        onClose={() => setIsResourceHubOpen(false)}
+        course={course}
+        tasks={tasks}
+        materials={materials}
+      />
     </div>
   );
 }

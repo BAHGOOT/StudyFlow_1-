@@ -19,6 +19,7 @@ interface SessionBlueprintDrawerProps {
   materials: CourseMaterial[];
   onClose: () => void;
   onStartFocusSession: (task: Task) => void;
+  onToggleTaskComplete?: (taskId: string) => void;
 }
 
 export function SessionBlueprintDrawer({
@@ -27,6 +28,7 @@ export function SessionBlueprintDrawer({
   materials,
   onClose,
   onStartFocusSession,
+  onToggleTaskComplete,
 }: SessionBlueprintDrawerProps) {
   if (!task) return null;
 
@@ -236,21 +238,31 @@ export function SessionBlueprintDrawer({
                 Ask Document AI Tutor
               </h3>
               <button
+                id="generate-concept-check-btn"
                 onClick={handleGenerateQuiz}
                 disabled={isGeneratingQuiz}
-                className="px-3 py-1 bg-emerald-600 text-white text-[11px] font-bold rounded-lg shadow-xs flex items-center gap-1"
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-extrabold rounded-xl shadow-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
               >
-                {isGeneratingQuiz ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Award className="w-3 h-3 text-amber-300" />}
-                <span>Practice Quiz</span>
+                {isGeneratingQuiz ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5 text-amber-300" />}
+                <span>Generate Concept Check</span>
               </button>
             </div>
 
             {/* Quiz View */}
             {activeQuiz && (
-              <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-3">
-                <div className="text-xs font-bold text-emerald-950 dark:text-emerald-200">{activeQuiz.quizTitle}</div>
+              <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-extrabold text-emerald-950 dark:text-emerald-200 flex items-center gap-1.5">
+                    <Brain className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>{activeQuiz.quizTitle}</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 px-2 py-0.5 rounded-full">
+                    3 Practice Questions
+                  </span>
+                </div>
+
                 {activeQuiz.questions.map((q, qIdx) => (
-                  <div key={q.id} className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 space-y-1.5">
+                  <div key={q.id} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
                     <p className="text-xs font-bold text-slate-900 dark:text-white">Q{qIdx + 1}. {q.question}</p>
                     <div className="grid grid-cols-1 gap-1.5">
                       {q.options.map((opt, oIdx) => {
@@ -261,16 +273,16 @@ export function SessionBlueprintDrawer({
                             key={oIdx}
                             onClick={() => setQuizAnswers((prev) => ({ ...prev, [q.id]: oIdx }))}
                             disabled={quizSubmitted}
-                            className={`p-2 rounded-lg text-xs text-left border ${
+                            className={`p-2.5 rounded-xl text-xs text-left border transition-all cursor-pointer ${
                               quizSubmitted
                                 ? isCorrect
-                                  ? 'bg-emerald-100 text-emerald-900 font-bold border-emerald-500'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-200 font-bold border-emerald-500'
                                   : isSelected
-                                  ? 'bg-rose-100 text-rose-900 border-rose-500'
-                                  : 'bg-slate-50 text-slate-600 border-slate-200'
+                                  ? 'bg-rose-100 dark:bg-rose-950 text-rose-900 dark:text-rose-200 border-rose-500'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                                 : isSelected
-                                ? 'bg-indigo-50 text-indigo-900 font-bold border-indigo-500'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 font-bold border-indigo-500'
+                                : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                             }`}
                           >
                             {opt}
@@ -278,17 +290,42 @@ export function SessionBlueprintDrawer({
                         );
                       })}
                     </div>
+                    {quizSubmitted && q.explanation && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg italic">
+                        💡 {q.explanation}
+                      </p>
+                    )}
                   </div>
                 ))}
+
                 {!quizSubmitted ? (
                   <button
                     onClick={() => setQuizSubmitted(true)}
-                    className="w-full py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow-xs"
+                    disabled={Object.keys(quizAnswers).length < activeQuiz.questions.length}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                   >
-                    Check Answers
+                    Check Answers ({Object.keys(quizAnswers).length}/3 Answered)
                   </button>
                 ) : (
-                  <p className="text-xs font-bold text-emerald-600 text-center">Great effort!</p>
+                  <div className="space-y-2 text-center pt-1">
+                    <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      🎉 Concept Check Complete! You answered {
+                        activeQuiz.questions.filter((q) => quizAnswers[q.id] === q.correctOptionIndex).length
+                      }/3 correctly.
+                    </p>
+                    {onToggleTaskComplete && task.status !== 'completed' && (
+                      <button
+                        onClick={() => {
+                          onToggleTaskComplete(task.id);
+                          onClose();
+                        }}
+                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-extrabold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Award className="w-4 h-4 text-amber-400" />
+                        <span>Mark Task Complete (+Study Coins)</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )}

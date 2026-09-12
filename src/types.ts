@@ -63,6 +63,8 @@ export interface CourseMaterial {
   userId?: string;
   courseId: string;
   courseName?: string;
+  linkedExamId?: string; // Optional link to specific Exam/Quiz task
+  linkedExamTitle?: string; // Title of linked Exam/Quiz milestone
   title: string;
   fileName: string;
   fileType: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc';
@@ -131,6 +133,8 @@ export type StudentProfile = {
   tier: string;
   email: string;
   role?: 'admin' | 'student';
+  coins?: number;
+  streakDays?: number;
 };
 
 export type TreeSpecies =
@@ -181,4 +185,18 @@ export type NavScreen =
   | 'store'
   | 'progress'
   | 'settings';
+
+export interface CapturedNote {
+  id: string;
+  content: string;
+  courseId?: string;
+  courseName?: string;
+  courseColor?: string;
+  materialId?: string;
+  materialTitle?: string;
+  createdAt: string; // ISO string or relative time
+  isConvertedToTask?: boolean;
+  convertedTaskId?: string;
+  tags?: string[];
+}
 

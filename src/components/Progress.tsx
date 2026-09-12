@@ -1,19 +1,32 @@
+import React, { useState } from 'react';
 import { Course, Task } from '../types';
 import {
   CheckCircle2,
   Clock,
   AlertOctagon,
   TrendingUp,
+  Target,
+  Sparkles,
   BookOpen,
 } from 'lucide-react';
 import { formatDeadlineRelative, formatDuration } from '../utils/smartPlanner';
+import { GradeProjectionView } from './GradeProjectionView';
 
 interface ProgressProps {
   tasks: Task[];
   courses: Course[];
+  onOpenScorePrompt?: (task: Task) => void;
+  onUpdateTaskGrade?: (taskId: string, achievedGrade: number, maxGrade?: number, weightPercentage?: number) => void;
 }
 
-export function Progress({ tasks, courses }: ProgressProps) {
+export function Progress({
+  tasks,
+  courses,
+  onOpenScorePrompt,
+  onUpdateTaskGrade,
+}: ProgressProps) {
+  const [activeTab, setActiveTab] = useState<'overview' | 'projection'>('projection');
+
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'completed');
   const activeTasks = tasks.filter((t) => t.status !== 'completed');
@@ -42,18 +55,89 @@ export function Progress({ tasks, courses }: ProgressProps) {
 
   return (
     <div id="progress-page" className="space-y-8 pb-20">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-slate-900 tracking-tight">
-          My Progress
-        </h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Academic semester progress, study velocity, and course completion rates.
-        </p>
+      {/* Header & Subtab Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-slate-900 dark:text-white tracking-tight">
+            My Progress & Performance
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Academic semester progress, exam grade projections, and study velocity metrics.
+          </p>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 dark:bg-slate-900 rounded-2xl shrink-0 self-start sm:self-auto">
+          <button
+            id="progress-tab-projection-btn"
+            type="button"
+            onClick={() => setActiveTab('projection')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'projection'
+                ? 'bg-amber-400 text-slate-950 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Target className="w-4 h-4 text-slate-950" />
+            <span>🎯 Grade Projection</span>
+          </button>
+          <button
+            id="progress-tab-overview-btn"
+            type="button"
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'overview'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span>Overview & Velocity</span>
+          </button>
+        </div>
       </div>
 
-      {/* Top 4 Metrics Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {activeTab === 'projection' ? (
+        <GradeProjectionView
+          tasks={tasks}
+          courses={courses}
+          onOpenScorePrompt={onOpenScorePrompt}
+          onUpdateTaskGrade={onUpdateTaskGrade}
+        />
+      ) : (
+        <>
+          {/* Quick Callout to Grade Projection */}
+          <div
+            id="overview-grade-projection-banner"
+            onClick={() => setActiveTab('projection')}
+            className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-indigo-50 dark:from-slate-900 dark:to-indigo-950/60 border border-amber-200 dark:border-indigo-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-amber-300 transition-all group"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="p-2.5 bg-amber-400 text-slate-950 rounded-xl shrink-0 font-black shadow-xs">
+                <Target className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Target Semester GPA Exam Calculator</span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400/30 text-amber-900 dark:text-amber-200 text-[10px] font-extrabold uppercase">
+                    Grade Projection View
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium mt-0.5">
+                  Calculate the exact scores required on upcoming exams, quizzes, and projects to reach your GPA goal!
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="px-4 py-2 bg-slate-900 dark:bg-amber-400 text-white dark:text-slate-950 rounded-xl text-xs font-extrabold shrink-0 group-hover:scale-105 transition-all shadow-xs cursor-pointer"
+            >
+              Open Grade Projection →
+            </button>
+          </div>
+
+          {/* Top 4 Metrics Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Weekly completion */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-2">
@@ -209,6 +293,8 @@ export function Progress({ tasks, courses }: ProgressProps) {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

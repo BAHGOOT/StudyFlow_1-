@@ -553,6 +553,27 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
     });
   };
 
+  // Quick Capture Task Converter
+  const handleQuickCaptureAddTask = (taskData: Partial<Task>) => {
+    const course = courses.find((c) => c.id === taskData.courseId) || courses[0];
+    const createdTask: Task = {
+      id: `task-${Date.now()}`,
+      name: taskData.name || 'Quick Takeaway Task',
+      courseId: course?.id || 'gen',
+      type: taskData.type || 'Study',
+      deadline: taskData.deadline || new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+      estimatedMinutes: taskData.estimatedMinutes || 30,
+      importance: 3,
+      difficulty: 3,
+      notes: taskData.notes || '',
+      status: 'todo',
+      smartPriorityScore: 75,
+      materialId: taskData.materialId,
+      materialTitle: taskData.materialTitle,
+    };
+    handleAddTask(createdTask);
+  };
+
   // Add Course
   const handleAddCourse = (newCourse: Course) => {
     const updatedCourses = [...courses, newCourse];
@@ -634,6 +655,86 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
       todayPlan: planResult.todayPlan,
     });
     showToast('Task removed and study plan updated');
+  };
+
+  // Bulk Complete Tasks
+  const handleBulkCompleteTasks = (taskIds: string[]) => {
+    if (!taskIds.length) return;
+    const idsSet = new Set(taskIds);
+    let totalEarnedCoins = 0;
+
+    const nextTasks = tasks.map((t) => {
+      if (idsSet.has(t.id)) {
+        const isMarkingComplete = t.status !== 'completed';
+        if (isMarkingComplete) {
+          const estMinutes = t.estimatedMinutes || 60;
+          totalEarnedCoins += Math.max(1, Math.round((estMinutes / 60) * 5));
+        }
+        const nextStatus: 'completed' | 'todo' = t.status === 'completed' ? 'todo' : 'completed';
+        const updated: Task = {
+          ...t,
+          status: nextStatus,
+          completedAt: nextStatus === 'completed' ? new Date().toISOString() : undefined,
+        };
+        saveTaskToDb(currentUser.uid, updated);
+        return updated;
+      }
+      return t;
+    });
+
+    if (totalEarnedCoins > 0) {
+      setCoins((prev) => {
+        const nextCoins = prev + totalEarnedCoins;
+        updateUserProfileDoc(currentUser.uid, { coins: nextCoins });
+        return nextCoins;
+      });
+    }
+
+    setTasks(nextTasks);
+
+    const rebalanceResult = generateSmartStudyPlanFromLecturesAndCourses({
+      existingCourses: courses,
+      existingTasks: nextTasks,
+      lectures,
+      commute,
+      suggestedDailyHours: availability.dailyHours,
+    });
+
+    setWeeklyPlan(rebalanceResult.weeklyPlan);
+    setTodayPlan(rebalanceResult.todayPlan);
+    updateUserProfileDoc(currentUser.uid, {
+      weeklyPlan: rebalanceResult.weeklyPlan,
+      todayPlan: rebalanceResult.todayPlan,
+    });
+
+    showToast(`🎉 Bulk completed ${taskIds.length} tasks! ${totalEarnedCoins > 0 ? `+${totalEarnedCoins} Study Coins 🪙` : ''}`);
+  };
+
+  // Bulk Delete Tasks
+  const handleBulkDeleteTasks = (taskIds: string[]) => {
+    if (!taskIds.length) return;
+    const idsSet = new Set(taskIds);
+    const updatedTasks = tasks.filter((t) => !idsSet.has(t.id));
+
+    setTasks(updatedTasks);
+    taskIds.forEach((id) => deleteTaskFromDb(currentUser.uid, id));
+
+    const rebalanceResult = generateSmartStudyPlanFromLecturesAndCourses({
+      existingCourses: courses,
+      existingTasks: updatedTasks,
+      lectures,
+      commute,
+      suggestedDailyHours: availability.dailyHours,
+    });
+
+    setWeeklyPlan(rebalanceResult.weeklyPlan);
+    setTodayPlan(rebalanceResult.todayPlan);
+    updateUserProfileDoc(currentUser.uid, {
+      weeklyPlan: rebalanceResult.weeklyPlan,
+      todayPlan: rebalanceResult.todayPlan,
+    });
+
+    showToast(`🗑️ Bulk deleted ${taskIds.length} tasks and updated your schedule.`);
   };
 
   // Apply full scanned timetable results (courses, tasks, lectures, availability, study plan)
@@ -878,6 +979,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
             availability={availability}
             profile={profile}
             lectures={lectures}
+            materials={materials}
             focusSession={focusSession}
             onMainTaskVisibilityChange={setIsMainTaskVisible}
             onStartTask={handleStartTask}
@@ -885,6 +987,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
             onToggleTaskComplete={handleToggleTaskComplete}
             onTogglePlanItemComplete={handleTogglePlanItemComplete}
             onRescheduleTask={handleRescheduleTask}
+            onAddTask={handleQuickCaptureAddTask}
             onNavigateToTasks={() => setCurrentScreen('tasks')}
             onNavigateToCourses={() => setCurrentScreen('courses')}
             onNavigateToSettings={() => setCurrentScreen('settings')}
@@ -901,6 +1004,8 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
             onStartTask={handleStartTask}
             onToggleComplete={handleToggleTaskComplete}
             onDeleteTask={handleDeleteTask}
+            onBulkCompleteTasks={handleBulkCompleteTasks}
+            onBulkDeleteTasks={handleBulkDeleteTasks}
             onOpenAddTask={() => setIsAddTaskOpen(true)}
             activeTaskId={focusSession.activeTask?.id}
             onExpandSession={focusSession.expandSession}
@@ -913,6 +1018,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           <Courses
             courses={courses}
             tasks={tasks}
+            materials={materials}
             plantedTrees={plantedTrees}
             onOpenAddCourse={() => setIsAddCourseOpen(true)}
             onSelectCourseTasks={() => setCurrentScreen('tasks')}
@@ -987,6 +1093,12 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           <Progress
             tasks={tasks}
             courses={courses}
+            onOpenScorePrompt={(task) => setTaskForScorePrompt(task)}
+            onUpdateTaskGrade={(taskId, achievedGrade, maxGrade, weightPercentage) => {
+              const targetTask = tasks.find((t) => t.id === taskId);
+              if (!targetTask) return;
+              handleSaveScore(taskId, achievedGrade, maxGrade, weightPercentage);
+            }}
           />
         )}
 
@@ -1041,6 +1153,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           materials={materials}
           onClose={() => setBlueprintTask(null)}
           onStartFocusSession={handleStartTask}
+          onToggleTaskComplete={handleToggleTaskComplete}
         />
       )}
 
