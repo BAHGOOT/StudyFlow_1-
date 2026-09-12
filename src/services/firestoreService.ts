@@ -21,6 +21,7 @@ import {
   CollegeCommute,
   TreeSpecies,
   CourseMaterial,
+  UserFeedback,
 } from '../types';
 import {
   INITIAL_COURSES,
@@ -509,6 +510,19 @@ export async function saveBatchScannedWorkspaceData(
     }
   } catch (err) {
     console.warn('Firestore saveBatchScannedWorkspaceData error:', err);
+  }
+}
+
+/**
+ * Submit User Feedback entry to Firestore under feedback/{feedbackId}
+ */
+export async function submitFeedbackToDb(feedback: UserFeedback): Promise<void> {
+  try {
+    const feedbackDoc = doc(db, 'feedback', feedback.id);
+    await setDoc(feedbackDoc, cleanForFirestore(feedback));
+  } catch (err) {
+    console.error('Firestore submitFeedbackToDb error:', err);
+    throw err;
   }
 }
 

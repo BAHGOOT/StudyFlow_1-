@@ -48,6 +48,9 @@ import { CollegeScheduleModal } from './components/CollegeScheduleModal';
 import { AssessmentCheckModal } from './components/AssessmentCheckModal';
 import { PlanPreviewModal } from './components/PlanPreviewModal';
 import { ScorePromptModal } from './components/ScorePromptModal';
+import { BetaBanner } from './components/BetaBanner';
+import { FeedbackModal } from './components/FeedbackModal';
+import '@uploadthing/react/styles.css';
 import { generateRemedialTasksForExam } from './utils/gradeCalculator';
 import { AuthScreen } from './components/AuthScreen';
 import { AuthProvider, useAuth, AuthUser } from './contexts/AuthContext';
@@ -170,6 +173,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
   const [draftPlanResult, setDraftPlanResult] = useState<SmartStudyPlanGenerationResult | null>(null);
   const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
   const [taskForScorePrompt, setTaskForScorePrompt] = useState<Task | null>(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -935,21 +939,26 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row font-sans selection:bg-indigo-500/15 selection:text-indigo-950 transition-colors duration-200">
-      {/* Navigation */}
-      <Navigation
-        currentScreen={currentScreen}
-        onNavigate={setCurrentScreen}
-        profile={profile}
-        userEmail={currentUser.email || undefined}
-        onOpenAddTask={() => setIsAddTaskOpen(true)}
-        treesCount={plantedTrees.length}
-        coins={coins}
-        onSignOut={logout}
-      />
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-indigo-500/15 selection:text-indigo-950 transition-colors duration-200">
+      {/* Top Beta Announcement Banner */}
+      <BetaBanner onOpenFeedback={() => setIsFeedbackOpen(true)} />
 
-      {/* Main Content Area */}
-      <main className="flex-1 min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 w-full">
+      <div className="flex-1 flex flex-col md:flex-row w-full">
+        {/* Navigation */}
+        <Navigation
+          currentScreen={currentScreen}
+          onNavigate={setCurrentScreen}
+          profile={profile}
+          userEmail={currentUser.email || undefined}
+          onOpenAddTask={() => setIsAddTaskOpen(true)}
+          treesCount={plantedTrees.length}
+          coins={coins}
+          onSignOut={logout}
+          onOpenFeedback={() => setIsFeedbackOpen(true)}
+        />
+
+        {/* Main Content Area */}
+        <main className="flex-1 min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 w-full">
         {toastMessage && (
           <div
             id="global-feedback-toast"
@@ -1153,6 +1162,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           />
         )}
       </main>
+      </div>
 
       {/* Session Blueprint Drawer */}
       {blueprintTask && (
@@ -1285,6 +1295,15 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
         task={taskForScorePrompt}
         courses={courses}
         onSaveScore={handleSaveScore}
+      />
+
+      {/* User Feedback Drawer / Modal */}
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        userId={currentUser.uid}
+        userEmail={currentUser.email || ''}
+        onSuccessToast={showToast}
       />
     </div>
   );

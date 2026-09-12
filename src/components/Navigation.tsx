@@ -10,6 +10,7 @@ import {
   Trees,
   ShoppingBag,
   Library,
+  MessageSquareHeart,
 } from 'lucide-react';
 import { NavScreen, StudentProfile } from '../types';
 
@@ -22,6 +23,7 @@ interface NavigationProps {
   treesCount?: number;
   coins?: number;
   onSignOut?: () => void;
+  onOpenFeedback?: () => void;
 }
 
 export function Navigation({
@@ -33,6 +35,7 @@ export function Navigation({
   treesCount = 0,
   coins = 0,
   onSignOut,
+  onOpenFeedback,
 }: NavigationProps) {
   const isAdmin = profile.role === 'admin' || userEmail?.toLowerCase() === 'mohamedelkoramy97@gmail.com';
   const initials = (profile.name || 'Student')
@@ -181,8 +184,25 @@ export function Navigation({
           </nav>
         </div>
 
-        {/* Bottom User Profile */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+        {/* Bottom User Profile & Feedback */}
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0 space-y-2">
+          {onOpenFeedback && (
+            <button
+              id="sidebar-give-feedback-button"
+              type="button"
+              onClick={onOpenFeedback}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-indigo-50/70 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 text-xs font-semibold transition-all duration-150 cursor-pointer group"
+            >
+              <div className="flex items-center gap-2">
+                <MessageSquareHeart className="w-4 h-4 text-pink-500 group-hover:scale-110 transition-transform" />
+                <span>Give Feedback</span>
+              </div>
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[9px] uppercase tracking-wider">
+                BETA
+              </span>
+            </button>
+          )}
+
           <button
             id="sidebar-user-profile-button"
             onClick={() => onNavigate('settings')}
@@ -259,6 +279,18 @@ export function Navigation({
             <Plus className="w-3.5 h-3.5" />
             <span>Add Task</span>
           </button>
+          {onOpenFeedback && (
+            <button
+              id="mobile-give-feedback-btn"
+              type="button"
+              onClick={onOpenFeedback}
+              className="p-1.5 text-pink-500 hover:text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-950/40 rounded-lg transition-colors cursor-pointer"
+              title="Give Feedback"
+              aria-label="Give Feedback"
+            >
+              <MessageSquareHeart className="w-5 h-5" />
+            </button>
+          )}
           <button
             id="mobile-quick-settings"
             onClick={() => onNavigate('settings')}

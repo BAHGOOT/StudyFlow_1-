@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Library,
   Upload,
@@ -23,8 +23,7 @@ import {
 } from 'lucide-react';
 import { Course, CourseMaterial, MaterialOutlineTopic, MaterialFormulaConcept, Task } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../lib/firebase';
+import { UploadDropzone, UploadButton } from '../utils/uploadthing';
 
 interface MaterialsProps {
   courses: Course[];
@@ -49,8 +48,7 @@ export function Materials({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCourseId, setUploadCourseId] = useState<string>(courses[0]?.id || '');
   const [uploadExamId, setUploadExamId] = useState<string>('none');
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadStatusMessage, setUploadStatusMessage] = useState<string>('');
 
   // Filter exam milestones for linking materials
   const examMilestones = tasks.filter(
@@ -102,181 +100,180 @@ export function Materials({
   const totalTopics = materials.reduce((acc, m) => acc + (m.topicsSummary?.length || 0), 0);
   const totalFormulas = materials.reduce((acc, m) => acc + (m.keyFormulasAndConcepts?.length || 0), 0);
 
-  // Process file upload or indexing via AI
-  const handleProcessFileAndIndex = async (
-    fileOrTitle: File | string,
-    courseId: string,
-    passedFileType?: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc',
-    textContent?: string
-  ) => {
+  // Handle upload completion via Uploadthing
+  const handleUploadthingComplete = async (res: any[]) => {
+    if (!res || res.length === 0) return;
     setIsUploading(true);
-    const selectedCourse = courses.find((c) => c.id === courseId) || courses[0];
-    const userId = currentUser?.uid || 'usr_demo';
+    setUploadStatusMessage('Indexing uploaded materials with AI...');
+    const selectedCourse = courses.find((c) => c.id === uploadCourseId) || courses[0];
+    const targetExam = examMilestones.find((t) => t.id === uploadExamId);
 
-    try {
-      let title = '';
-      let fileName = '';
+    for (const fileItem of res) {
+      const fileUrl = fileItem.url || fileItem.ufsUrl || '';
+      const fileName = fileItem.name || 'Uploaded Document';
+      const sizeInBytes = fileItem.size || 0;
+      const fileSizeStr = sizeInBytes < 1024 * 1024
+        ? `${(sizeInBytes / 1024).toFixed(1)} KB`
+        : `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+      const extension = fileName.split('.').pop()?.toLowerCase() || '';
       let fileType: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc' = 'pdf';
-      let fileDataUrl = '';
-      let fileSizeStr = '2.4 MB';
-      let fileBase64 = '';
-      let rawText = textContent || '';
-
-      if (fileOrTitle instanceof File) {
-        const file = fileOrTitle;
-        title = file.name;
-        fileName = file.name;
-
-        // 1. Upload file directly to Firebase Storage under materials/{userId}/{Date.now()}_{fileName}
-        const storagePath = `materials/${userId}/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, storagePath);
-        const uploadSnapshot = await uploadBytes(storageRef, file);
-        fileDataUrl = await getDownloadURL(uploadSnapshot.ref);
-
-        fileSizeStr = file.size < 1024 * 1024
-          ? `${(file.size / 1024).toFixed(1)} KB`
-          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-
-        const extension = file.name.split('.').pop()?.toLowerCase();
-        if (['pptx', 'ppt'].includes(extension || '')) {
-          fileType = 'slides';
-        } else if (['docx', 'doc'].includes(extension || '')) {
-          fileType = 'doc';
-        } else if (file.name.toLowerCase().includes('syllabus')) {
-          fileType = 'syllabus';
-        } else if (['txt', 'md', 'json'].includes(extension || '')) {
-          fileType = 'notes';
-          rawText = await file.text();
-        } else {
-          fileType = 'pdf';
-        }
-
-        // Convert file to Base64 for multimodal Gemini analysis (PDF or image)
-        if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-          fileBase64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              resolve(result.split(',')[1]); // Only keep base64 data payload
-            };
-            reader.onerror = (e) => reject(e);
-            reader.readAsDataURL(file);
-          });
-        }
+      if (['pptx', 'ppt'].includes(extension)) {
+        fileType = 'slides';
+      } else if (['docx', 'doc'].includes(extension)) {
+        fileType = 'doc';
+      } else if (fileName.toLowerCase().includes('syllabus')) {
+        fileType = 'syllabus';
+      } else if (['txt', 'md', 'json'].includes(extension)) {
+        fileType = 'notes';
       } else {
-        // Manual Note mode
-        title = fileOrTitle;
-        fileName = fileOrTitle;
-        fileType = passedFileType || 'notes';
-        fileDataUrl = 'pasted_text';
-        fileSizeStr = `${Math.round(rawText.length / 1024)} KB`;
+        fileType = 'pdf';
       }
 
-      // 3. Call Express Gemini API endpoint /api/materials/index
+      try {
+        const aiRes = await fetch('/api/materials/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: fileName,
+            fileName,
+            fileType,
+            courseName: selectedCourse?.name || 'General Course',
+            textContent: `Document uploaded via Uploadthing: ${fileName}. File URL: ${fileUrl}`,
+            fileUrl,
+          }),
+        });
+
+        const json = await aiRes.json();
+        const aiData = json.data || {};
+
+        const newMat: CourseMaterial = {
+          id: `mat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          courseId: selectedCourse?.id || 'course-gen',
+          courseName: selectedCourse?.name || 'General',
+          linkedExamId: targetExam ? targetExam.id : undefined,
+          linkedExamTitle: targetExam ? targetExam.name : undefined,
+          title: aiData.title || fileName,
+          fileName,
+          fileType,
+          fileSizeStr,
+          pageCount: aiData.pageCount || 1,
+          uploadedAt: new Date().toISOString(),
+          topicsSummary: aiData.topicsSummary || ['Uploaded Study Material', 'Core Concepts'],
+          chapterOutline: aiData.chapterOutline || [
+            { title: 'Section 1: Overview', pageRange: 'Pages 1-10', summary: 'Core theory and concepts.' },
+          ],
+          keyFormulasAndConcepts: aiData.keyFormulasAndConcepts || [
+            { concept: 'Key Formula', formulaOrRule: 'Standard Reference', description: 'Important course definition.' },
+          ],
+          practiceProblems: aiData.practiceProblems || ['Review uploaded notes and formulas.'],
+          fileDataUrl: fileUrl,
+        };
+
+        onAddMaterial(newMat);
+      } catch (err) {
+        console.warn('AI Indexing fallback:', err);
+        const fallbackMat: CourseMaterial = {
+          id: `mat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          courseId: selectedCourse?.id || 'course-gen',
+          courseName: selectedCourse?.name || 'General',
+          linkedExamId: targetExam ? targetExam.id : undefined,
+          linkedExamTitle: targetExam ? targetExam.name : undefined,
+          title: fileName,
+          fileName,
+          fileType,
+          fileSizeStr,
+          pageCount: 1,
+          uploadedAt: new Date().toISOString(),
+          topicsSummary: ['Uploaded Material', 'Lecture File'],
+          chapterOutline: [
+            { title: 'Section 1: Overview', pageRange: 'Page 1', summary: 'Content stored via Uploadthing.' },
+          ],
+          keyFormulasAndConcepts: [
+            { concept: 'Direct Upload', formulaOrRule: fileName, description: 'File uploaded via Uploadthing.' },
+          ],
+          practiceProblems: ['Review uploaded material.'],
+          fileDataUrl: fileUrl,
+        };
+        onAddMaterial(fallbackMat);
+      }
+    }
+    setIsUploading(false);
+    setUploadStatusMessage('');
+  };
+
+  // Manual note creation
+  const handleCreateManualNote = async () => {
+    if (!noteTitle.trim()) return;
+    setIsUploading(true);
+    const selectedCourse = courses.find((c) => c.id === noteCourseId) || courses[0];
+    const targetExam = examMilestones.find((t) => t.id === noteExamId);
+
+    try {
       const res = await fetch('/api/materials/index', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title,
-          fileName,
-          fileType,
+          title: noteTitle,
+          fileName: `${noteTitle}.txt`,
+          fileType: 'notes',
           courseName: selectedCourse?.name || 'General Course',
-          textContent: rawText || `Directly uploaded file: ${title}. Raw content stored securely.`,
-          fileBase64: fileBase64 || undefined,
-          mimeType: (fileOrTitle instanceof File) ? fileOrTitle.type : 'text/plain',
+          textContent: noteContent || `Note on ${noteTitle}`,
         }),
       });
 
       const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || 'AI indexing failed');
-      }
       const aiData = json.data || {};
 
-      const targetExamId = (fileOrTitle instanceof File) ? uploadExamId : noteExamId;
-      const linkedExam = examMilestones.find((t) => t.id === targetExamId);
-
       const newMat: CourseMaterial = {
         id: `mat-${Date.now()}`,
         courseId: selectedCourse?.id || 'course-gen',
         courseName: selectedCourse?.name || 'General',
-        linkedExamId: linkedExam ? linkedExam.id : undefined,
-        linkedExamTitle: linkedExam ? linkedExam.name : undefined,
-        title,
-        fileName,
-        fileType,
-        fileSizeStr,
+        linkedExamId: targetExam ? targetExam.id : undefined,
+        linkedExamTitle: targetExam ? targetExam.name : undefined,
+        title: noteTitle,
+        fileName: `${noteTitle}.txt`,
+        fileType: 'notes',
+        fileSizeStr: `${Math.max(1, Math.round(noteContent.length / 1024))} KB`,
         pageCount: aiData.pageCount || 1,
         uploadedAt: new Date().toISOString(),
-        topicsSummary: aiData.topicsSummary || ['Key Lecture Topics', 'Core Principles'],
+        topicsSummary: aiData.topicsSummary || ['Key Lecture Notes', 'Core Principles'],
         chapterOutline: aiData.chapterOutline || [
-          { title: 'Chapter 1: Foundations', pageRange: 'Pages 1-15', summary: 'Core theory and definitions.' },
+          { title: 'Notes Overview', pageRange: 'Page 1', summary: noteContent.slice(0, 120) },
         ],
         keyFormulasAndConcepts: aiData.keyFormulasAndConcepts || [
-          { concept: 'Key Theorem', formulaOrRule: 'f(x) = dx/dt', description: 'Fundamental rate equation.' },
+          { concept: 'Key Takeaway', formulaOrRule: 'Formula/Rule', description: noteContent.slice(0, 100) },
         ],
-        practiceProblems: aiData.practiceProblems || ['Problem 1: Apply core formulas.'],
-        fileDataUrl, // Stored URL or pasted_text tag
+        practiceProblems: aiData.practiceProblems || ['Review notes and core takeaways.'],
+        fileDataUrl: 'pasted_text',
       };
 
       onAddMaterial(newMat);
-    } catch (err: any) {
-      console.warn('AI Indexing fallback:', err);
-      // Client fallback if offline or API error
-      const title = (fileOrTitle instanceof File) ? fileOrTitle.name : fileOrTitle;
-      const fileSizeStr = (fileOrTitle instanceof File)
-        ? (fileOrTitle.size < 1024 * 1024 ? `${(fileOrTitle.size / 1024).toFixed(1)} KB` : `${(fileOrTitle.size / (1024 * 1024)).toFixed(1)} MB`)
-        : `${Math.round((textContent || '').length / 1024)} KB`;
-
-      const targetExamId = (fileOrTitle instanceof File) ? uploadExamId : noteExamId;
-      const linkedExam = examMilestones.find((t) => t.id === targetExamId);
-
-      const newMat: CourseMaterial = {
+    } catch (err) {
+      const fallbackMat: CourseMaterial = {
         id: `mat-${Date.now()}`,
         courseId: selectedCourse?.id || 'course-gen',
         courseName: selectedCourse?.name || 'General',
-        linkedExamId: linkedExam ? linkedExam.id : undefined,
-        linkedExamTitle: linkedExam ? linkedExam.name : undefined,
-        title,
-        fileName: title,
-        fileType: (fileOrTitle instanceof File)
-          ? (fileOrTitle.name.endsWith('.pptx') || fileOrTitle.name.endsWith('.ppt') ? 'slides' : 'pdf')
-          : (passedFileType || 'notes'),
-        fileSizeStr,
+        linkedExamId: targetExam ? targetExam.id : undefined,
+        linkedExamTitle: targetExam ? targetExam.name : undefined,
+        title: noteTitle,
+        fileName: `${noteTitle}.txt`,
+        fileType: 'notes',
+        fileSizeStr: `${Math.max(1, Math.round(noteContent.length / 1024))} KB`,
         pageCount: 1,
         uploadedAt: new Date().toISOString(),
-        topicsSummary: ['Uploaded Study Material', 'Lecture File'],
-        chapterOutline: [
-          { title: 'Section 1: Overview', pageRange: 'Page 1', summary: 'Content successfully uploaded.' },
-        ],
-        keyFormulasAndConcepts: [
-          { concept: 'Direct Upload', formulaOrRule: title, description: 'File successfully stored in Firebase Storage.' },
-        ],
-        practiceProblems: ['Problem 1: Review uploaded content.'],
-        fileDataUrl: (fileOrTitle instanceof File) ? 'failed_index' : 'pasted_text',
+        topicsSummary: ['Study Note', 'Lecture Summary'],
+        chapterOutline: [{ title: 'Overview', pageRange: 'Page 1', summary: noteContent.slice(0, 100) }],
+        keyFormulasAndConcepts: [{ concept: 'Note Note', formulaOrRule: noteTitle, description: noteContent.slice(0, 80) }],
+        practiceProblems: ['Review note topics.'],
+        fileDataUrl: 'pasted_text',
       };
-      onAddMaterial(newMat);
+      onAddMaterial(fallbackMat);
     } finally {
       setIsUploading(false);
       setShowNoteModal(false);
       setNoteTitle('');
       setNoteContent('');
-    }
-  };
-
-  const handleFileDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      handleProcessFileAndIndex(file, uploadCourseId || courses[0]?.id || 'course-calc');
-    }
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      handleProcessFileAndIndex(file, uploadCourseId || courses[0]?.id || 'course-calc');
     }
   };
 
@@ -452,55 +449,45 @@ export function Materials({
             </div>
           </div>
 
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragOver(true);
-            }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={handleFileDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-              isDragOver
-                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40'
-                : 'border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-800/20'
-            }`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.ppt,.pptx,.doc,.docx,.txt,.md,image/*"
-              onChange={handleFileInputChange}
-              className="hidden"
-            />
+          <div className="rounded-xl overflow-hidden">
             {isUploading ? (
-              <div className="flex flex-col items-center justify-center py-4">
-                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  AI Document Indexing in Progress...
+              <div className="border-2 border-dashed border-indigo-400 dark:border-indigo-600 rounded-xl p-8 text-center bg-indigo-50/50 dark:bg-indigo-950/30 flex flex-col items-center justify-center py-6">
+                <Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin mb-3" />
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  {uploadStatusMessage || 'AI Document Indexing in Progress...'}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">
                   Parsing chapter outlines, formulas, and generating practice questions with Gemini AI.
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3 shadow-xs">
-                  <Upload className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-bold text-slate-800 dark:text-white">
-                  Drop your course files here or click to upload
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Supports PDF, PPTX, DOCX, TXT, and Images (Max 25MB)
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2.5 justify-center">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs transition-colors">
-                    <BookOpen className="w-3.5 h-3.5" />
-                    Browse Files
-                  </span>
-                </div>
-              </div>
+              <UploadDropzone
+                endpoint="courseMaterialUploader"
+                onUploadBegin={() => {
+                  setIsUploading(true);
+                  setUploadStatusMessage('Uploading document to Uploadthing...');
+                }}
+                onClientUploadComplete={handleUploadthingComplete}
+                onUploadError={(error: Error) => {
+                  setIsUploading(false);
+                  setUploadStatusMessage('');
+                  console.error('Upload error:', error);
+                }}
+                appearance={{
+                  container: 'border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 bg-slate-50/60 dark:bg-slate-800/30 rounded-xl p-6 transition-all',
+                  label: 'text-sm font-bold text-slate-800 dark:text-white',
+                  allowedContent: 'text-xs text-slate-500 dark:text-slate-400 font-medium',
+                  button: 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer ut-ready:bg-indigo-600 ut-uploading:cursor-not-allowed',
+                }}
+                content={{
+                  label: 'Drop course documents here or click to choose files',
+                  allowedContent: 'Supports PDF, PPTX, DOCX, TXT (up to 32MB)',
+                  button({ ready }) {
+                    if (ready) return 'Choose & Upload File';
+                    return 'Preparing uploader...';
+                  },
+                }}
+              />
             )}
           </div>
         </div>
@@ -824,7 +811,7 @@ export function Materials({
               <button
                 onClick={() => {
                   if (noteTitle.trim()) {
-                    handleProcessFileAndIndex(noteTitle, noteCourseId, 'notes', noteContent);
+                    handleCreateManualNote();
                   }
                 }}
                 disabled={!noteTitle.trim() || isUploading}

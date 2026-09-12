@@ -275,6 +275,30 @@ export function CourseResourceHubModal({
     window.print();
   };
 
+  const handleDownloadMaterial = (mat: CourseMaterial) => {
+    if (mat.fileDataUrl && (mat.fileDataUrl.startsWith('http') || mat.fileDataUrl.startsWith('data:'))) {
+      const a = document.createElement('a');
+      a.href = mat.fileDataUrl;
+      a.download = mat.fileName || `${mat.title || 'material'}.pdf`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      const content = `# ${mat.title || 'Course Material'}\nCourse: ${mat.courseName || course.name}\nType: ${mat.fileType}\nUploaded: ${mat.uploadedAt || ''}\n\n## Topics Summary\n${(mat.topicsSummary || []).map(t => `- ${t}`).join('\n')}\n\n## Chapter Outline\n${(mat.chapterOutline || []).map(c => `### ${c.title} (${c.pageRange || ''})\n${c.summary || ''}`).join('\n\n')}\n\n## Key Formulas & Concepts\n${(mat.keyFormulasAndConcepts || []).map(f => `### ${f.concept}\nFormula: ${f.formulaOrRule || ''}\n${f.description || ''}`).join('\n\n')}\n\n## Practice Problems\n${(mat.practiceProblems || []).map(p => `- ${p}`).join('\n')}`;
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(mat.fileName || mat.title || 'material').replace(/\.[^/.]+$/, "")}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const handleCopyFormula = (rule: string) => {
     safeCopyToClipboard(rule);
     setCopiedFormula(rule);
@@ -582,6 +606,17 @@ ${pastQuizExamResults.map((t) => `- ${t.name}: ${t.achievedGrade}/${t.maxGrade} 
                               {mat.fileName} • {mat.fileSizeStr || '2.5 MB'} • {mat.pageCount ? `${mat.pageCount} pages` : 'Document'}
                             </p>
                           </div>
+
+                          <button
+                            type="button"
+                            id={`download-mat-btn-${mat.id}`}
+                            onClick={() => handleDownloadMaterial(mat)}
+                            className="no-print p-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+                            title="Download material"
+                          >
+                            <Download className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                            <span className="hidden sm:inline text-[11px]">Download</span>
+                          </button>
                         </div>
 
                         {/* Topics Summary */}

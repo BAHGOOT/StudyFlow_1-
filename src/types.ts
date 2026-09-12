@@ -201,3 +201,15 @@ export interface CapturedNote {
   tags?: string[];
 }
 
+export type FeedbackType = 'Feature Request' | 'Bug Report' | 'General Thoughts';
+
+export interface UserFeedback {
+  id: string;
+  userId: string;
+  userEmail: string;
+  rating: number;
+  type: FeedbackType;
+  message: string;
+  timestamp: string;
+}
+

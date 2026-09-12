@@ -2,11 +2,24 @@ import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import { createRouteHandler } from 'uploadthing/express';
+import { uploadRouter } from './server/uploadthing';
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Mount Uploadthing Express Route Handler before body parsers
+app.use(
+  '/api/uploadthing',
+  createRouteHandler({
+    router: uploadRouter,
+    config: {
+      token: process.env.UPLOADTHING_TOKEN,
+    },
+  })
+);
 
 // Support large image uploads for college timetable schedules
 app.use(express.json({ limit: '25mb' }));
