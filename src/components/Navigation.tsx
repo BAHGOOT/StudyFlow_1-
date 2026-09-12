@@ -37,7 +37,6 @@ export function Navigation({
   onSignOut,
   onOpenFeedback,
 }: NavigationProps) {
-  const isAdmin = profile.role === 'admin' || userEmail?.toLowerCase() === 'mohamedelkoramy97@gmail.com';
   const initials = (profile.name || 'Student')
     .split(' ')
     .map((n) => n[0])
