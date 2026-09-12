@@ -87,7 +87,12 @@ export function CourseResourceHubModal({
 
   // Handle client upload completion via Uploadthing
   const handleUploadComplete = async (res: any[]) => {
-    if (!res || res.length === 0 || !course) return;
+    if (!res || res.length === 0 || !course) {
+      setIsUploading(false);
+      setUploadStatus('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     setIsUploading(true);
     setUploadStatus('Saving uploaded file to course...');
     const userId = currentUser?.uid || 'usr_demo';
@@ -184,6 +189,7 @@ export function CourseResourceHubModal({
 
     setIsUploading(false);
     setUploadStatus('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Uploadthing hook with explicit error diagnostics
@@ -193,6 +199,9 @@ export function CourseResourceHubModal({
     },
     onUploadError: (error: Error) => {
       console.error('Detailed Uploadthing error in Course Resource Hub:', error);
+      setIsUploading(false);
+      setUploadStatus('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
     },
   });
 
@@ -206,7 +215,9 @@ export function CourseResourceHubModal({
       // Attempt upload via Uploadthing helper
       const uploadRes = await startUpload(files);
       if (uploadRes && uploadRes.length > 0) {
-        // onClientUploadComplete handles saving
+        // onClientUploadComplete handles saving, so we just reset the input here
+        // (handleUploadComplete will also reset it, but this ensures it's cleared if the callback is delayed)
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
     } catch (uploadError) {
@@ -305,6 +316,7 @@ export function CourseResourceHubModal({
 
     setIsUploading(false);
     setUploadStatus('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Filter materials for this course

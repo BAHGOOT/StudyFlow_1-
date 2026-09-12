@@ -104,7 +104,12 @@ export function Materials({
 
   // Handle upload completion via Uploadthing
   const handleUploadthingComplete = async (res: any[]) => {
-    if (!res || res.length === 0) return;
+    if (!res || res.length === 0) {
+      setIsUploading(false);
+      setUploadStatusMessage('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     setIsUploading(true);
     setUploadStatusMessage('Indexing uploaded materials with AI...');
     const selectedCourse = courses.find((c) => c.id === uploadCourseId) || courses[0];
@@ -202,6 +207,7 @@ export function Materials({
     }
     setIsUploading(false);
     setUploadStatusMessage('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const { startUpload } = useUploadThing('courseMaterialUploader', {
@@ -212,6 +218,7 @@ export function Materials({
       console.error('Detailed Uploadthing error in Materials view:', error);
       setIsUploading(false);
       setUploadStatusMessage('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
     },
   });
 
@@ -223,6 +230,7 @@ export function Materials({
     try {
       const uploadRes = await startUpload(files);
       if (uploadRes && uploadRes.length > 0) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
     } catch (err) {
@@ -328,6 +336,7 @@ export function Materials({
     }
     setIsUploading(false);
     setUploadStatusMessage('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Manual note creation

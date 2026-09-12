@@ -782,7 +782,12 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
 
   // Material CRUD Handlers
   const handleAddMaterial = async (newMat: CourseMaterial) => {
-    const updated = [newMat, ...materials];
+    let updated: CourseMaterial[];
+    if (materials.some((m) => m.id === newMat.id)) {
+      updated = materials.map((m) => (m.id === newMat.id ? newMat : m));
+    } else {
+      updated = [newMat, ...materials];
+    }
     setMaterials(updated);
     if (currentUser) {
       await saveMaterialToDb(currentUser.uid, newMat);
