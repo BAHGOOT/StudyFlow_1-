@@ -186,19 +186,37 @@ export function Planner({
     const sessions = weeklyPlan.filter((s) => s.day === day);
     const plannedMins = sessions.reduce((acc, s) => acc + s.durationMinutes, 0);
     const plannedHrs = Math.round((plannedMins / 60) * 10) / 10;
-    const cap = availability.dailyHours[day] ?? 2;
+    const cap = availability.dailyHours[day] ?? 3;
     const lecStats = getDayLectureStats(day);
     const lecHrs = lecStats.hours;
-    const netCapHrs = Math.max(0, Math.round((cap - lecHrs) * 10) / 10);
-    const isOverloaded = plannedHrs > netCapHrs + 0.1 || (plannedHrs + lecHrs > 8 && plannedHrs > cap);
+    const totalAcademicHrs = Math.round((plannedHrs + lecHrs) * 10) / 10;
+
+    // Overload occurs ONLY if:
+    // 1. Planned study time exceeds the user's daily study cap by more than 20 mins, OR
+    // 2. Total combined commitments (classes + study) exceed the healthy daily ceiling (9.5 hours)
+    const isStudyCapExceeded = plannedHrs > cap + 0.35;
+    const isTotalAcademicOverloaded = totalAcademicHrs > 9.5;
+    const isOverloaded = isStudyCapExceeded || isTotalAcademicOverloaded;
+
+    const excessHrs = isStudyCapExceeded
+      ? Math.round((plannedHrs - cap) * 10) / 10
+      : Math.round((totalAcademicHrs - 9.5) * 10) / 10;
+
+    const message = isStudyCapExceeded
+      ? `Planned study time (${plannedHrs}h) exceeds your configured daily study cap (${cap}h) by ${excessHrs}h.`
+      : `Combined college classes (${lecHrs}h) and planned study (${plannedHrs}h) total ${totalAcademicHrs}h, exceeding the recommended daily limit (9.5h).`;
 
     return {
       plannedHrs,
       cap,
       lecHrs,
-      netCapHrs,
+      netCapHrs: cap,
+      totalAcademicHrs,
       isOverloaded,
-      excessHrs: Math.round((plannedHrs - netCapHrs) * 10) / 10,
+      isStudyCapExceeded,
+      isTotalAcademicOverloaded,
+      excessHrs: Math.max(0, excessHrs),
+      message,
     };
   };
 
@@ -453,7 +471,7 @@ export function Planner({
                       {overload.isOverloaded && (
                         <span
                           className="text-[9px] font-extrabold px-1 py-0.2 rounded-full bg-rose-500 text-white animate-pulse"
-                          title={`Overload Risk: ${overload.plannedHrs}h planned exceeds net capacity (${overload.netCapHrs}h)`}
+                          title={`Overload Warning: ${overload.message}`}
                         >
                           ⚠️ Risk
                         </span>
@@ -538,7 +556,7 @@ export function Planner({
                     </span>
                   </div>
                   <p className="text-xs text-rose-900/90 dark:text-rose-200 mt-1 leading-relaxed">
-                    Planned study time ({selectedDayOverload.plannedHrs}h) exceeds your net available study capacity ({selectedDayOverload.netCapHrs}h) after accounting for {selectedDayOverload.lecHrs}h of college lectures.
+                    {selectedDayOverload.message}
                   </p>
                 </div>
               </div>

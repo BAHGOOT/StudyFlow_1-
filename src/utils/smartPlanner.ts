@@ -314,7 +314,7 @@ export function getDayOfWeekFromDeadline(deadlineStr?: string): 'Monday' | 'Tues
 export const getTaskDeadlineDay = getDayOfWeekFromDeadline;
 
 /**
- * Finds next non-conflicting study time slot on a given day that does not clash with lectures or commute
+ * Finds next non-conflicting study time slot on a given day that does not clash with lectures, commute, or other study sessions.
  */
 function findAvailableStudyTimeSlot(
   dayLectures: CollegeLecture[],
@@ -330,10 +330,10 @@ function findAvailableStudyTimeSlot(
 
   // Add lectures and commute
   dayLectures.forEach((l) => {
-    const [sh, sm] = l.startTime.split(':').map(Number);
-    const [eh, em] = l.endTime.split(':').map(Number);
-    const lectureStart = sh * 60 + sm;
-    const lectureEnd = eh * 60 + em;
+    const [sh, sm] = (l.startTime || '09:00').split(':').map(Number);
+    const [eh, em] = (l.endTime || '10:00').split(':').map(Number);
+    const lectureStart = (isNaN(sh) ? 9 : sh) * 60 + (isNaN(sm) ? 0 : sm);
+    const lectureEnd = (isNaN(eh) ? 10 : eh) * 60 + (isNaN(em) ? 0 : em);
     // Buffer with commute
     blockedIntervals.push({
       start: Math.max(0, lectureStart - commuteTo),
@@ -341,28 +341,57 @@ function findAvailableStudyTimeSlot(
     });
   });
 
-  // Add already scheduled sessions
+  // Add already scheduled sessions (with 15-minute buffer between sessions)
   existingSessionsOnDay.forEach((s) => {
-    const [sh, sm] = s.timeSlot.split(':').map(Number);
-    const start = sh * 60 + sm;
+    const [sh, sm] = (s.timeSlot || '14:00').split(':').map(Number);
+    const start = (isNaN(sh) ? 14 : sh) * 60 + (isNaN(sm) ? 0 : sm);
     const end = start + (s.durationMinutes || 60);
-    blockedIntervals.push({ start, end });
+    blockedIntervals.push({ start, end: end + 15 });
   });
 
-  // Candidate start times (in minutes) sorted by realistic student routine (afternoon/evening first, then morning)
-  const candidateMinutes = [
-    16 * 60,       // 16:00
-    17 * 60 + 30,  // 17:30
-    19 * 60,       // 19:00
-    20 * 60 + 30,  // 20:30
-    14 * 60 + 30,  // 14:30
-    11 * 60,       // 11:00
-    9 * 60 + 30,   // 09:30
-    8 * 60 + 30,   // 08:30
-    21 * 60 + 30,  // 21:30
-  ];
+  // Realistic candidate start times across morning, afternoon, and evening (in minutes from midnight)
+  const hasMorningLecture = dayLectures.some((l) => {
+    const [sh] = (l.startTime || '09:00').split(':').map(Number);
+    return !isNaN(sh) && sh < 13;
+  });
+
+  const candidateMinutes = hasMorningLecture
+    ? [
+        14 * 60,       // 14:00 (Post-lecture afternoon)
+        15 * 60 + 30,  // 15:30
+        17 * 60,       // 17:00
+        18 * 60 + 30,  // 18:30 (Evening)
+        20 * 60,       // 20:00
+        21 * 60 + 15,  // 21:15
+        13 * 60,       // 13:00
+      ]
+    : [
+        9 * 60 + 30,   // 09:30 (Morning block)
+        11 * 60,       // 11:00
+        14 * 60,       // 14:00 (Afternoon)
+        15 * 60 + 30,  // 15:30
+        17 * 60,       // 17:00
+        18 * 60 + 30,  // 18:30 (Evening)
+        20 * 60,       // 20:00
+        8 * 60 + 30,   // 08:30
+      ];
 
   for (const cand of candidateMinutes) {
+    const candEnd = cand + sessionDurationMinutes;
+    // Must finish by 22:30 at the latest
+    if (candEnd > 22 * 60 + 30) continue;
+    const hasConflict = blockedIntervals.some(
+      (b) => Math.max(cand, b.start) < Math.min(candEnd, b.end)
+    );
+    if (!hasConflict) {
+      const h = Math.floor(cand / 60);
+      const m = cand % 60;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+  }
+
+  // Fallback: incremental scan from 13:00 to 21:00 in 30-min steps
+  for (let cand = 13 * 60; cand <= 21 * 60; cand += 30) {
     const candEnd = cand + sessionDurationMinutes;
     const hasConflict = blockedIntervals.some(
       (b) => Math.max(cand, b.start) < Math.min(candEnd, b.end)
@@ -374,9 +403,9 @@ function findAvailableStudyTimeSlot(
     }
   }
 
-  // Fallback default
-  const baseHour = 18 + existingSessionsOnDay.length;
-  const clampedHour = Math.min(22, baseHour);
+  // Last-resort fallback
+  const baseHour = 16 + existingSessionsOnDay.length * 2;
+  const clampedHour = Math.min(21, baseHour);
   return `${clampedHour.toString().padStart(2, '0')}:00`;
 }
 
@@ -655,23 +684,14 @@ export function rebalanceWeeklyPlanWithSchedule(
     return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
   });
 
-  // Map each day's study budget, college commitments, and net free capacity
+  // Map each day's study budget, college commitments, and capacity
   const dayCapacities = DAYS_OF_WEEK_LIST.map((day) => {
     const isRest = day === restDay;
     const college = calculateCollegeDayCommitment(day, lectures, commute);
     const configuredHours = isRest ? 0 : (availability.dailyHours[day] ?? 3);
     const configuredMinutes = configuredHours * 60;
-
-    // Fixed college class hours in minutes
     const fixedCollegeMinutes = college.totalCollegeMinutes;
     const collegeClassHours = fixedCollegeMinutes / 60;
-
-    // Net Free Capacity = Daily Configured Study Capacity - Fixed College Hours
-    const netFreeMinutes = Math.max(0, configuredMinutes - fixedCollegeMinutes);
-
-    // Realistic Workload Cap: If fixed college class hours exceed 4 hours (>240m),
-    // cap scheduled study tasks for that day to AT MOST 1 or 2 light tasks (max 60-90m study)
-    const isClassHeavy = fixedCollegeMinutes > 240;
 
     return {
       day,
@@ -679,8 +699,6 @@ export function rebalanceWeeklyPlanWithSchedule(
       college,
       collegeClassHours,
       fixedCollegeMinutes,
-      netFreeMinutes,
-      isClassHeavy,
       dayLectures: lectures.filter((l) => l.day === day),
       budgetMinutes: configuredMinutes,
       allocatedMinutes: 0,
@@ -690,88 +708,114 @@ export function rebalanceWeeklyPlanWithSchedule(
     };
   });
 
-  // Distribute tasks respecting deadlines, credit weights, heavy analytical caps, and class workload offloading
+  // Distribute tasks respecting deadlines, credit weights, heavy analytical caps, and even daily load
   sortedTasks.forEach((task, taskIdx) => {
     const course = courses.find((c) => c.id === task.courseId);
     const credits = course?.credits || 3;
     const importance = task.importance || 3;
     const isHeavy = isHeavyAnalyticalTask(task, course) || task.difficulty >= 4 || credits >= 4;
 
-    // Workload duration scales with credit hours, difficulty, and importance
+    // Workload duration scales reasonably with credit hours, difficulty, and importance
     let taskDuration = task.estimatedMinutes || 45;
     if (credits >= 4 || importance >= 4 || task.difficulty >= 4) {
       taskDuration = Math.min(90, Math.max(60, taskDuration));
     } else if (credits <= 2 && importance <= 2 && task.difficulty <= 2) {
-      taskDuration = Math.min(45, Math.max(25, taskDuration));
+      taskDuration = Math.min(45, Math.max(30, taskDuration));
     }
 
-    const deadlineDay = getTaskDeadlineDay(task.deadline);
-    const deadlineDayIdx = deadlineDay ? DAY_INDEX_MAP[deadlineDay] ?? 6 : 6;
+    // Determine eligible days considering actual deadline date
+    const nonRestDays = dayCapacities.filter((d) => !d.isRestDay && d.budgetMinutes > 0);
+    const pool = nonRestDays.length > 0 ? nonRestDays : dayCapacities;
 
-    // Filter candidate days: must be on or before deadline day AND not the resting day!
-    const nonRestDays = dayCapacities.filter((d) => !d.isRestDay);
-    const eligibleDays = nonRestDays.filter((d) => {
-      const idx = DAY_INDEX_MAP[d.day];
-      return idx <= deadlineDayIdx;
-    });
+    let candidateDays = pool;
+    if (task.deadline) {
+      const deadlineDate = new Date(task.deadline);
+      if (!isNaN(deadlineDate.getTime())) {
+        const now = new Date();
+        const diffMs = deadlineDate.getTime() - now.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
-    const pool = eligibleDays.length > 0 ? eligibleDays : nonRestDays;
-    if (pool.length === 0) return;
-
-    // Filter out class-heavy days (>4h classes) if the day already has 1 or 2 sessions or if task is heavy
-    let candidateDays = pool.filter((d) => {
-      if (d.isClassHeavy) {
-        // Cap class-heavy days (>4h classes) to AT MOST 1 or 2 light tasks (or max 75m allocated)
-        if (d.sessionCount >= 2 || d.allocatedMinutes >= 75) return false;
-        if (isHeavy) return false; // Offload heavy tasks away from class-heavy days
-      }
-      return true;
-    });
-
-    if (candidateDays.length === 0) {
-      candidateDays = pool; // Fallback if all available days are class-heavy
-    }
-
-    // WORKLOAD BALANCING RULE: Prevent scheduling more than 2 heavy analytical subjects on the same day
-    if (isHeavy) {
-      const nonOverloadedDays = candidateDays.filter((d) => d.heavyAnalyticalCount < 2);
-      if (nonOverloadedDays.length > 0) {
-        candidateDays = nonOverloadedDays;
-      }
-
-      // SMART LOAD OFFLOADING: Prefer low-class days (0-2 class hours) or weekend days for heavy tasks!
-      const lowClassDays = candidateDays.filter(
-        (d) => d.fixedCollegeMinutes <= 120 || d.day === 'Saturday' || d.day === 'Sunday'
-      );
-      if (lowClassDays.length > 0) {
-        candidateDays = lowClassDays;
-      }
-    }
-
-    let bestDayObj = candidateDays[0];
-
-    if (task.type === 'Exam' || task.type === 'Quiz') {
-      // Prioritize days immediately leading up to the quiz/exam (day before or deadline day)
-      const targetDays = candidateDays.filter((d) => {
-        const idx = DAY_INDEX_MAP[d.day];
-        return idx === deadlineDayIdx || idx === Math.max(0, deadlineDayIdx - 1);
-      });
-      const candidates = targetDays.length > 0 ? targetDays : candidateDays;
-      bestDayObj = candidates.reduce((best, curr) =>
-        curr.allocatedMinutes < best.allocatedMinutes ? curr : best
-      );
-    } else {
-      // For assignments & general tasks: pick day with lowest load ratio before deadline
-      let minLoadRatio = 9999;
-      candidateDays.forEach((dayObj) => {
-        const totalCommitted = dayObj.allocatedMinutes + (dayObj.fixedCollegeMinutes * 0.4);
-        const ratio = totalCommitted / Math.max(60, dayObj.budgetMinutes);
-        if (ratio < minLoadRatio) {
-          minLoadRatio = ratio;
-          bestDayObj = dayObj;
+        // Only constrain if the deadline falls within the next 6 days
+        if (diffDays > 0 && diffDays <= 6) {
+          const deadlineDayName = getTaskDeadlineDay(task.deadline);
+          if (deadlineDayName) {
+            const deadlineDayIdx = DAY_INDEX_MAP[deadlineDayName] ?? 6;
+            const beforeDeadline = pool.filter((d) => DAY_INDEX_MAP[d.day] <= deadlineDayIdx);
+            if (beforeDeadline.length > 0) {
+              candidateDays = beforeDeadline;
+            }
+          }
         }
-      });
+      }
     }
+
+    // Balanced Candidate Selection:
+    // 1. Prioritize days where task fits within the student's daily study budget
+    // 2. Ensure total academic commitment (classes + study) doesn't exceed 9.5 hours
+    // 3. Ensure heavy analytical count does not exceed 2 on any single day
+    const daysWithCapacity = candidateDays.filter((d) => {
+      const fitsBudget = d.allocatedMinutes + taskDuration <= d.budgetMinutes + 15;
+      const totalDailyMins = d.allocatedMinutes + d.fixedCollegeMinutes + taskDuration;
+      const healthyLoad = totalDailyMins <= 9.5 * 60; // Max 9.5h total academic commitments
+      const heavyOk = !isHeavy || d.heavyAnalyticalCount < 2;
+      return fitsBudget && healthyLoad && heavyOk;
+    });
+
+    const activeCandidatePool = daysWithCapacity.length > 0 ? daysWithCapacity : candidateDays;
+
+    let bestDayObj = activeCandidatePool[0];
+    let bestScore = Infinity;
+
+    activeCandidatePool.forEach((dayObj) => {
+      const currentLoadRatio = dayObj.allocatedMinutes / Math.max(30, dayObj.budgetMinutes);
+      const totalDailyMinutes = dayObj.allocatedMinutes + dayObj.fixedCollegeMinutes;
+
+      // Base score driven by study load ratio (lower ratio = more underutilized study capacity)
+      let score = currentLoadRatio * 100;
+
+      // PRIORITY 1: Strong bonus for days that have ZERO tasks scheduled so far!
+      // This eliminates empty days (e.g. Wednesday and Thursday sitting with 0 tasks)
+      if (dayObj.sessions.length === 0) {
+        score -= 60;
+      } else if (dayObj.sessions.length === 1) {
+        score -= 25;
+      } else if (dayObj.sessions.length >= 3) {
+        score += 35; // Discourage packing >3 tasks on the same day
+      }
+
+      // Respect daily budget strictly
+      if (dayObj.allocatedMinutes + taskDuration > dayObj.budgetMinutes) {
+        score += 70;
+      }
+
+      // Heavy analytical subjects: prefer days that don't already have one
+      if (isHeavy) {
+        score += dayObj.heavyAnalyticalCount * 40;
+      }
+
+      // For Quizzes and Exams: prioritize days closest to the deadline for optimal retention
+      if (task.type === 'Exam' || task.type === 'Quiz') {
+        const dDayName = getTaskDeadlineDay(task.deadline);
+        if (dDayName) {
+          const deadlineIdx = DAY_INDEX_MAP[dDayName] ?? 6;
+          const currentIdx = DAY_INDEX_MAP[dayObj.day];
+          const distToDeadline = deadlineIdx - currentIdx;
+          if (distToDeadline >= 0 && distToDeadline <= 2) {
+            score -= (3 - distToDeadline) * 30; // Big bonus for 1-2 days before exam
+          }
+        }
+      }
+
+      // Total daily fatigue dampening (if day already has > 6h classes + study)
+      if (totalDailyMinutes > 360) {
+        score += 25;
+      }
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestDayObj = dayObj;
+      }
+    });
 
     // Track heavy analytical subject count & session count for this day
     if (isHeavy) {

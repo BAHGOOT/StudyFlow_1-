@@ -320,18 +320,43 @@ function processExtractedData(
 
   // 5. Generate Weekly Plan & Today Plan
   const allCombinedTasks = [...currentTasks, ...tasks];
-  const weeklyPlan = rebalanceWeeklyPlanWithSchedule(allCombinedTasks, updatedAvailability, lectures, commute);
+  const weeklyPlan = rebalanceWeeklyPlanWithSchedule(
+    allCombinedTasks,
+    updatedAvailability,
+    lectures,
+    commute,
+    allAvailableCourses
+  );
 
-  // Generate Today's plan from the top priority tasks
+  // Generate Today's plan from sessions matching today in the optimized weekly plan
+  const dayNameLookup: Record<number, 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'> = {
+    0: 'Sunday',
+    1: 'Monday',
+    2: 'Tuesday',
+    3: 'Wednesday',
+    4: 'Thursday',
+    5: 'Friday',
+    6: 'Saturday',
+  };
+  const todayName = dayNameLookup[new Date().getDay()] || 'Tuesday';
+  const todaySessions = weeklyPlan.filter((s) => s.day === todayName);
   const sortedTasks = [...allCombinedTasks].sort((a, b) => b.smartPriorityScore - a.smartPriorityScore);
-  const todayTopTasks = sortedTasks.slice(0, 3);
-  const todayPlan: TodayPlanItem[] = todayTopTasks.map((t, idx) => ({
-    id: `today-scan-${t.id}-${idx}`,
-    taskId: t.id,
-    timeSlot: `${(15 + idx * 2).toString().padStart(2, '0')}:00`,
-    durationMinutes: Math.min(60, t.estimatedMinutes),
-    completed: false,
-  }));
+
+  const todayPlan: TodayPlanItem[] = todaySessions.length > 0
+    ? todaySessions.map((s, idx) => ({
+        id: `today-scan-${s.id || idx}`,
+        taskId: s.taskId,
+        timeSlot: s.timeSlot,
+        durationMinutes: s.durationMinutes,
+        completed: false,
+      }))
+    : sortedTasks.slice(0, 2).map((t, idx) => ({
+        id: `today-scan-${t.id}-${idx}`,
+        taskId: t.id,
+        timeSlot: `${(15 + idx * 2).toString().padStart(2, '0')}:00`,
+        durationMinutes: Math.min(60, t.estimatedMinutes),
+        completed: false,
+      }));
 
   const summary = data.summary || `Extracted ${lectures.length} lecture blocks across ${allAvailableCourses.length} courses, created ${tasks.length} study tasks, and optimized weekly study schedule.`;
 

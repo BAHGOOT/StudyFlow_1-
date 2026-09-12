@@ -44,9 +44,10 @@ app.get('/api/health', (req, res) => {
 });
 
 // Candidate models for multimodal vision extraction with fallback support
+const GEMINI_MODEL = 'gemini-3.8-flash';
 const CANDIDATE_MODELS = [
+  GEMINI_MODEL,
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
 ];
 
 async function callGeminiWithFallback(ai: GoogleGenAI, cleanBase64: string, mimeType: string, prompt: string) {
@@ -258,7 +259,7 @@ Extract structured study metadata according to this exact JSON schema:
     let responseText = '{}';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODEL,
         contents: contentsParam,
         config: {
           responseMimeType: 'application/json',
@@ -267,7 +268,7 @@ Extract structured study metadata according to this exact JSON schema:
       responseText = response.text || '{}';
     } catch {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: contentsParam,
         config: {
           responseMimeType: 'application/json',
@@ -317,13 +318,13 @@ Use clear formatting, bullet points, latex equations, and step-by-step explanati
     let responseText = 'Unable to answer question.';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODEL,
         contents: prompt,
       });
       responseText = response.text || 'No response generated.';
     } catch {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
       });
       responseText = response.text || 'No response generated.';
@@ -368,7 +369,7 @@ Return JSON with this schema:
     let responseText = '{}';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -377,7 +378,7 @@ Return JSON with this schema:
       responseText = response.text || '{}';
     } catch {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
