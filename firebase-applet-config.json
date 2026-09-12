@@ -1,11 +1,11 @@
 {
-  "projectId": "global-dream-54r4b",
-  "appId": "1:927310420472:web:b6c583f799e624b0ecde0d",
-  "apiKey": "AIzaSyCQF3OYm2-RD6arSDx7KAQqjWK0Oqs9eUk",
-  "authDomain": "global-dream-54r4b.firebaseapp.com",
-  "storageBucket": "global-dream-54r4b.firebasestorage.app",
-  "messagingSenderId": "927310420472",
-  "measurementId": "",
-  "oAuthClientId": "927310420472-ht0umsea0svhfnb95duu7sgp186k1eg4.apps.googleusercontent.com",
+  "projectId": "studyflow-50ffd",
+  "appId": "1:181840277686:web:08c76966dcc944173ff617",
+  "apiKey": "AIzaSyDhvJ4P5sQj4Hpoafkth0bLlekOJus1lgc",
+  "authDomain": "studyflow-50ffd.firebaseapp.com",
+  "storageBucket": "studyflow-50ffd.firebasestorage.app",
+  "messagingSenderId": "181840277686",
+  "measurementId": "G-50B8C5ZMH4",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
