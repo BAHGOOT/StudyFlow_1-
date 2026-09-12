@@ -18,6 +18,7 @@ interface CoursesProps {
   onStartTask?: (task: Task) => void;
   onToggleTaskComplete?: (taskId: string) => void;
   onOpenAddTaskForCourse?: (courseId: string) => void;
+  onAddMaterial?: (material: CourseMaterial) => void;
 }
 
 export function Courses({
@@ -31,6 +32,7 @@ export function Courses({
   onStartTask,
   onToggleTaskComplete,
   onOpenAddTaskForCourse,
+  onAddMaterial,
 }: CoursesProps) {
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [selectedCourseForDetail, setSelectedCourseForDetail] = useState<Course | null>(null);
@@ -371,6 +373,7 @@ export function Courses({
           courses={safeCourses}
           tasks={safeTasks}
           materials={materials}
+          onAddMaterial={onAddMaterial}
         />
       )}
 

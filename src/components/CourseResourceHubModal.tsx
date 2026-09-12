@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Course, Task, CourseMaterial } from '../types';
 import { safeCopyToClipboard } from '../utils/clipboard';
+import { useAuth } from '../contexts/AuthContext';
+import { saveMaterialToDb } from '../services/firestoreService';
+import { UploadDropzone } from '../utils/uploadthing';
 import {
   X,
   Printer,
@@ -20,6 +23,8 @@ import {
   GraduationCap,
   Download,
   Info,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 import { calculateCourseGrade, getStatusBadgeConfig } from '../utils/gradeCalculator';
 import { formatDeadlineRelative } from '../utils/smartPlanner';
@@ -32,6 +37,7 @@ interface CourseResourceHubModalProps {
   courses?: Course[];
   tasks: Task[];
   materials?: CourseMaterial[];
+  onAddMaterial?: (material: CourseMaterial) => void;
 }
 
 export function CourseResourceHubModal({
@@ -42,12 +48,17 @@ export function CourseResourceHubModal({
   courses = [],
   tasks = [],
   materials = [],
+  onAddMaterial,
 }: CourseResourceHubModalProps) {
+  const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'all' | 'materials' | 'formulas' | 'upcoming' | 'results'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedFormula, setCopiedFormula] = useState<string | null>(null);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [sortBy, setSortBy] = useState<'Newest' | 'Alphabetical' | 'Task Deadline'>('Newest');
+  const [localMaterials, setLocalMaterials] = useState<CourseMaterial[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
 
   // Resolve course from courseId, courses list, or propCourse
   const course = useMemo(() => {
@@ -58,9 +69,120 @@ export function CourseResourceHubModal({
     return propCourse || null;
   }, [propCourse, courseId, courses]);
 
-  // Safe fallback arrays
-  const safeMaterials = materials || [];
+  // Combine prop materials and newly uploaded materials
+  const safeMaterials = useMemo(() => {
+    const map = new Map<string, CourseMaterial>();
+    (materials || []).forEach((m) => {
+      if (m && m.id) map.set(m.id, m);
+    });
+    localMaterials.forEach((m) => {
+      if (m && m.id) map.set(m.id, m);
+    });
+    return Array.from(map.values());
+  }, [materials, localMaterials]);
+
   const safeTasks = tasks || [];
+
+  // Handle client upload completion via Uploadthing
+  const handleUploadComplete = async (res: any[]) => {
+    if (!res || res.length === 0 || !course) return;
+    setIsUploading(true);
+    setUploadStatus('Saving uploaded file to course...');
+    const userId = currentUser?.uid || 'usr_demo';
+
+    for (const fileItem of res) {
+      const fileUrl = fileItem.url || fileItem.ufsUrl || '';
+      const fileName = fileItem.name || 'Uploaded Document';
+      const sizeInBytes = fileItem.size || 0;
+      const fileSizeStr = sizeInBytes < 1024 * 1024
+        ? `${(sizeInBytes / 1024).toFixed(1)} KB`
+        : `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+      const extension = fileName.split('.').pop()?.toLowerCase() || '';
+      let fileType: 'pdf' | 'slides' | 'syllabus' | 'notes' | 'doc' = 'pdf';
+      if (['pptx', 'ppt'].includes(extension)) {
+        fileType = 'slides';
+      } else if (['docx', 'doc'].includes(extension)) {
+        fileType = 'doc';
+      } else if (fileName.toLowerCase().includes('syllabus')) {
+        fileType = 'syllabus';
+      } else if (['txt', 'md', 'json'].includes(extension)) {
+        fileType = 'notes';
+      } else {
+        fileType = 'pdf';
+      }
+
+      const matId = `mat-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const title = fileName.replace(/\.[^/.]+$/, "");
+
+      const newMat: CourseMaterial = {
+        id: matId,
+        courseId: course.id,
+        courseName: course.name,
+        title,
+        fileName,
+        fileType,
+        fileSizeStr,
+        pageCount: 1,
+        uploadedAt: new Date().toISOString(),
+        topicsSummary: ['Course Resource', 'Reference Document'],
+        chapterOutline: [
+          { title: 'Overview', pageRange: 'Page 1', summary: `Course attachment for ${course.name}.` },
+        ],
+        keyFormulasAndConcepts: [],
+        practiceProblems: [],
+        fileDataUrl: fileUrl,
+      };
+
+      // 1. Save directly to Firestore under users/{userId}/materials/{matId}
+      await saveMaterialToDb(userId, newMat);
+
+      // 2. Immediately update local state
+      setLocalMaterials((prev) => [newMat, ...prev.filter((m) => m.id !== newMat.id)]);
+
+      // 3. Notify parent
+      if (onAddMaterial) {
+        onAddMaterial(newMat);
+      }
+
+      // 4. Background AI indexing to extract topics and formulas if possible
+      try {
+        fetch('/api/materials/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: newMat.title,
+            fileName,
+            fileType,
+            courseName: course.name,
+            textContent: `Course attachment uploaded for ${course.name}: ${fileName}. File URL: ${fileUrl}`,
+            fileUrl,
+          }),
+        }).then(async (r) => {
+          if (r.ok) {
+            const json = await r.json();
+            if (json.data) {
+              const updatedMat: CourseMaterial = {
+                ...newMat,
+                topicsSummary: json.data.topicsSummary || newMat.topicsSummary,
+                chapterOutline: json.data.chapterOutline || newMat.chapterOutline,
+                keyFormulasAndConcepts: json.data.keyFormulasAndConcepts || newMat.keyFormulasAndConcepts,
+                practiceProblems: json.data.practiceProblems || newMat.practiceProblems,
+              };
+              await saveMaterialToDb(userId, updatedMat);
+              setLocalMaterials((prev) => [updatedMat, ...prev.filter((m) => m.id !== updatedMat.id)]);
+              if (onAddMaterial) onAddMaterial(updatedMat);
+            }
+          }
+        }).catch((err) => console.warn('Background AI indexing notice:', err));
+      } catch (e) {
+        // non-blocking
+      }
+    }
+
+    setIsUploading(false);
+    setUploadStatus('');
+  };
 
   // Filter materials for this course
   const courseMaterials = useMemo(() => {
@@ -567,14 +689,73 @@ ${pastQuizExamResults.map((t) => `- ${t.name}: ${t.achievedGrade}/${t.maxGrade} 
             {/* SECTION 1: MATERIALS & LECTURES */}
             {(activeTab === 'all' || activeTab === 'materials') && (
               <section id="hub-section-materials" className="space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <h3 className="text-base font-extrabold font-display text-slate-900 dark:text-white flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <span>Course Materials & Syllabus Guides</span>
-                  </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <div>
+                    <h3 className="text-base font-extrabold font-display text-slate-900 dark:text-white flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span>Course Materials & Syllabus Guides</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      Upload PDFs, lecture slides, formulas, and syllabus notes for {course.name}.
+                    </p>
+                  </div>
                   <span className="text-xs font-bold text-slate-400">
                     {courseMaterials.length} Documents
                   </span>
+                </div>
+
+                {/* Uploadthing Uploader for Course Materials */}
+                <div className="no-print bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                        <Upload className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                          Add Attachment to {course.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Supports .pdf, .docx, .pptx, .txt (up to 32MB)
+                        </p>
+                      </div>
+                    </div>
+
+                    {isUploading && (
+                      <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>{uploadStatus || 'Uploading...'}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <UploadDropzone
+                    endpoint="courseAttachment"
+                    onUploadBegin={() => {
+                      setIsUploading(true);
+                      setUploadStatus('Uploading file to course hub...');
+                    }}
+                    onClientUploadComplete={handleUploadComplete}
+                    onUploadError={(error: Error) => {
+                      setIsUploading(false);
+                      setUploadStatus('');
+                      console.error('Upload error in Hub:', error);
+                    }}
+                    appearance={{
+                      container: 'border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 bg-white dark:bg-slate-900 rounded-xl p-4 transition-all',
+                      label: 'text-xs font-bold text-slate-800 dark:text-slate-200',
+                      allowedContent: 'text-[10px] text-slate-500 dark:text-slate-400 font-medium',
+                      button: 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer ut-ready:bg-indigo-600 ut-uploading:cursor-not-allowed',
+                    }}
+                    content={{
+                      label: 'Drop course syllabus, slides, or PDF notes here',
+                      allowedContent: 'Accepts PDF, DOCX, PPTX, TXT',
+                      button({ ready }) {
+                        if (ready) return 'Choose File to Upload';
+                        return 'Readying...';
+                      },
+                    }}
+                  />
                 </div>
 
                 {courseMaterials.length === 0 ? (
@@ -584,7 +765,7 @@ ${pastQuizExamResults.map((t) => `- ${t.name}: ${t.achievedGrade}/${t.maxGrade} 
                       No materials uploaded for {course.name} yet.
                     </p>
                     <p className="text-[11px] text-slate-500">
-                      Upload PDFs or slide decks in the Course Detail or Materials tab to auto-extract chapter outlines and formulas.
+                      Upload your syllabus, lecture slides, or readings using the uploader above to auto-extract concepts and formulas.
                     </p>
                   </div>
                 ) : (

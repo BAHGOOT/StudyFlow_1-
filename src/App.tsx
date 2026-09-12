@@ -1039,6 +1039,7 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
               onStartTask={handleStartTask}
               onToggleTaskComplete={handleToggleTaskComplete}
               onOpenAddTaskForCourse={() => setIsAddTaskOpen(true)}
+              onAddMaterial={handleAddMaterial}
             />
           </ErrorBoundary>
         )}
