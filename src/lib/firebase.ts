@@ -1,24 +1,15 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import firebaseConfig from '../../firebase-applet-config.json';
 
-export const firebaseConfig = {
-  apiKey: "AIzaSyDhvJ4P5sQj4Hpoafkth0bLlekOJus1lgc",
-  authDomain: "studyflow-50ffd.firebaseapp.com",
-  projectId: "studyflow-50ffd",
-  storageBucket: "studyflow-50ffd.firebasestorage.app",
-  messagingSenderId: "181840277686",
-  appId: "1:181840277686:web:08c76966dcc944173ff617",
-  measurementId: "G-50B8C5ZMH4"
-};
+export { firebaseConfig };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
-export const storage = getStorage(app);
 
 export default app;
 
