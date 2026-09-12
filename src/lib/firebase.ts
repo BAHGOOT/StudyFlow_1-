@@ -1,18 +1,15 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import baseConfig from '../../firebase-applet-config.json';
-
-// Support both firebase-applet-config.json and optional Vercel/Vite environment variables
-const env = (import.meta as any).env || {};
+// Direct production configuration for studyflow-50ffd
 export const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY || baseConfig.apiKey,
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || baseConfig.authDomain,
-  projectId: env.VITE_FIREBASE_PROJECT_ID || baseConfig.projectId,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || baseConfig.storageBucket,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || baseConfig.messagingSenderId,
-  appId: env.VITE_FIREBASE_APP_ID || baseConfig.appId,
-  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || (baseConfig as any).measurementId || '',
+  apiKey: 'AIzaSyDhvJ4P5sQj4Hpoafkth0bllekOjus1lgc',
+  authDomain: 'studyflow-50ffd.firebaseapp.com',
+  projectId: 'studyflow-50ffd',
+  storageBucket: 'studyflow-50ffd.appspot.com',
+  messagingSenderId: '181840277686',
+  appId: '1:181840277686:web:08c76966dcc944173ff617',
+  measurementId: 'G-50B8C5ZMH4',
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
