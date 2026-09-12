@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Course, Task, PlantedTree, CourseMaterial } from '../types';
+import { safeCopyToClipboard } from '../utils/clipboard';
 import {
   X,
   BookOpen,
@@ -587,7 +588,7 @@ export function CourseDetailModal({
                                 type="button"
                                 onClick={() => {
                                   if (item.formulaOrRule) {
-                                    navigator.clipboard.writeText(item.formulaOrRule);
+                                    safeCopyToClipboard(item.formulaOrRule);
                                     setCopiedFormula(item.formulaOrRule);
                                     setTimeout(() => setCopiedFormula(null), 2000);
                                   }

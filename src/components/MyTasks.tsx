@@ -159,9 +159,9 @@ export function MyTasks({
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const course = getCourse(task.courseId);
-          const matchName = task.name.toLowerCase().includes(q);
-          const matchCourse = course?.name.toLowerCase().includes(q) || course?.code.toLowerCase().includes(q);
-          const matchType = task.type.toLowerCase().includes(q);
+          const matchName = (task.name || '').toLowerCase().includes(q);
+          const matchCourse = (course?.name || '').toLowerCase().includes(q) || (course?.code || '').toLowerCase().includes(q);
+          const matchType = (task.type || '').toLowerCase().includes(q);
           if (!matchName && !matchCourse && !matchType) return false;
         }
 

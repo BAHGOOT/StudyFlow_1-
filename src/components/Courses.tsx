@@ -133,7 +133,7 @@ export function Courses({
                 className="group relative bg-white rounded-2xl border border-slate-200/90 p-6 hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col justify-between cursor-pointer overflow-hidden"
               >
                 {/* Header with color indicator */}
-                <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                <div className="flex-1 flex flex-col justify-between">
                   <div>
                     <div className="flex items-start justify-between gap-3 mb-4">
                       <div className="flex items-center gap-3">

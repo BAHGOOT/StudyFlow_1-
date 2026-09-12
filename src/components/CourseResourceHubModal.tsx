@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Course, Task, CourseMaterial } from '../types';
+import { safeCopyToClipboard } from '../utils/clipboard';
 import {
   X,
   Printer,
@@ -264,28 +265,6 @@ export function CourseResourceHubModal({
 
   const handlePrint = () => {
     window.print();
-  };
-
-  const safeCopyToClipboard = (text: string): boolean => {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text);
-        return true;
-      }
-      // Fallback method
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed'; // Avoid scrolling to bottom
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      return successful;
-    } catch (err) {
-      console.warn('Failed to copy to clipboard', err);
-      return false;
-    }
   };
 
   const handleCopyFormula = (rule: string) => {

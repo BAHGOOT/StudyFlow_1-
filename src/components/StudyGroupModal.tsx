@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Course, Task } from '../types';
+import { safeCopyToClipboard } from '../utils/clipboard';
 import {
   X,
   Users,
@@ -110,13 +111,13 @@ export function StudyGroupModal({
   const milestoneCount = courseTasks.filter((t) => t.type === 'Exam' || t.type === 'Quiz' || t.type === 'Project').length;
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(invitationCode);
+    safeCopyToClipboard(invitationCode);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(invitationLink);
+    safeCopyToClipboard(invitationLink);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
   };

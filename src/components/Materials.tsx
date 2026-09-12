@@ -87,13 +87,14 @@ export function Materials({
   const [quizSubmitted, setQuizSubmitted] = useState(false);
 
   // Filter materials
-  const filteredMaterials = materials.filter((mat) => {
+  const filteredMaterials = (materials || []).filter((mat) => {
+    if (!mat) return false;
     const matchesCourse = selectedCourseId === 'all' || mat.courseId === selectedCourseId;
-    const matchesSearch =
-      searchQuery === '' ||
-      mat.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      mat.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      mat.topicsSummary.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+    const query = (searchQuery || '').toLowerCase();
+    const titleMatch = (mat.title || '').toLowerCase().includes(query);
+    const fileMatch = (mat.fileName || '').toLowerCase().includes(query);
+    const topicsMatch = Array.isArray(mat.topicsSummary) && mat.topicsSummary.some((t) => (t || '').toLowerCase().includes(query));
+    const matchesSearch = query === '' || titleMatch || fileMatch || topicsMatch;
     return matchesCourse && matchesSearch;
   });
 
