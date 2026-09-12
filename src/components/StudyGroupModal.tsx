@@ -54,11 +54,12 @@ export function StudyGroupModal({
   // Generate deterministic code based on course ID & code
   const invitationCode = useMemo(() => {
     if (!course) return '';
-    const cleanCode = course.code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'STUDY';
+    const cleanCode = (course.code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'STUDY';
     // Deterministic 4-char suffix from course ID
     let hash = 0;
-    for (let i = 0; i < course.id.length; i++) {
-      hash = (hash << 5) - hash + course.id.charCodeAt(i);
+    const courseIdStr = course.id || '';
+    for (let i = 0; i < courseIdStr.length; i++) {
+      hash = (hash << 5) - hash + courseIdStr.charCodeAt(i);
       hash |= 0;
     }
     const suffix = Math.abs(hash).toString(36).substring(0, 4).toUpperCase();
@@ -68,7 +69,7 @@ export function StudyGroupModal({
   const invitationLink = useMemo(() => {
     if (!course) return '';
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ai-study.app';
-    return `${origin}/join-group?courseId=${course.id}&code=${invitationCode}`;
+    return `${origin}/join-group?courseId=${course.id || ''}&code=${invitationCode}`;
   }, [course, invitationCode]);
 
   // Initial group members

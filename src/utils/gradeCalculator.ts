@@ -17,8 +17,9 @@ export interface CourseGradeSummary {
 /**
  * Calculates a course's running percentage and performance status from graded tasks.
  */
-export function calculateCourseGrade(courseId: string, tasks: Task[]): CourseGradeSummary {
-  const courseTasks = tasks.filter((t) => t.courseId === courseId);
+export function calculateCourseGrade(courseId: string, tasks: Task[] = []): CourseGradeSummary {
+  const safeTasks = tasks || [];
+  const courseTasks = safeTasks.filter((t) => t && t.courseId === courseId);
   
   // Graded tasks: must have maxGrade > 0 and achievedGrade != null
   const gradedTasks = courseTasks.filter(
@@ -120,7 +121,7 @@ export function getLetterGrade(percentage: number): string {
 /**
  * Returns color styles and label for the grade status badge
  */
-export function getStatusBadgeConfig(badge: 'Excellence' | 'On Track' | 'Needs Review') {
+export function getStatusBadgeConfig(badge?: 'Excellence' | 'On Track' | 'Needs Review' | string) {
   switch (badge) {
     case 'Excellence':
       return {
@@ -129,19 +130,20 @@ export function getStatusBadgeConfig(badge: 'Excellence' | 'On Track' | 'Needs R
         dotClass: 'bg-emerald-500',
         progressBarClass: 'bg-emerald-500',
       };
-    case 'On Track':
-      return {
-        label: 'On Track',
-        badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-800',
-        dotClass: 'bg-indigo-500',
-        progressBarClass: 'bg-indigo-600',
-      };
     case 'Needs Review':
       return {
         label: 'Needs Review',
         badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800',
         dotClass: 'bg-rose-500',
         progressBarClass: 'bg-rose-500',
+      };
+    case 'On Track':
+    default:
+      return {
+        label: 'On Track',
+        badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-800',
+        dotClass: 'bg-indigo-500',
+        progressBarClass: 'bg-indigo-600',
       };
   }
 }
@@ -155,8 +157,10 @@ export function generateRemedialTasksForExam(
   course: Course,
   materials: CourseMaterial[] = []
 ): Task[] {
-  const courseMats = materials.filter(
-    (m) => m.courseId === course.id || (m.courseName && m.courseName.toLowerCase() === course.name.toLowerCase())
+  const safeMaterials = materials || [];
+  const courseName = (course?.name || '').toLowerCase();
+  const courseMats = safeMaterials.filter(
+    (m) => m && (m.courseId === course.id || (m.courseName && m.courseName.toLowerCase() === courseName))
   );
   const primaryMat = courseMats[0];
 

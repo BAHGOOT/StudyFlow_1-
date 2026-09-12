@@ -65,61 +65,64 @@ export function CourseResourceHubModal({
   // Filter materials for this course
   const courseMaterials = useMemo(() => {
     if (!course) return [];
+    const courseNameLower = (course.name || '').toLowerCase();
     const filtered = safeMaterials.filter(
       (m) =>
-        m.courseId === course.id ||
-        (m.courseName && m.courseName.toLowerCase() === course.name.toLowerCase())
+        m &&
+        (m.courseId === course.id ||
+        (m.courseName && m.courseName.toLowerCase() === courseNameLower))
     );
 
     if (sortBy === 'Alphabetical') {
-      return [...filtered].sort((a, b) => a.title.localeCompare(b.title));
+      return [...filtered].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
     } else if (sortBy === 'Task Deadline') {
       return [...filtered].sort((a, b) => {
-        const taskA = safeTasks.find((t) => t.id === a.linkedExamId);
-        const taskB = safeTasks.find((t) => t.id === b.linkedExamId);
+        const taskA = safeTasks.find((t) => t && t.id === a.linkedExamId);
+        const taskB = safeTasks.find((t) => t && t.id === b.linkedExamId);
         if (taskA && taskB) {
-          return new Date(taskA.deadline).getTime() - new Date(taskB.deadline).getTime();
+          return new Date(taskA.deadline || 0).getTime() - new Date(taskB.deadline || 0).getTime();
         }
         if (taskA) return -1;
         if (taskB) return 1;
-        return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime();
+        return new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime();
       });
     } else {
-      return [...filtered].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+      return [...filtered].sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime());
     }
   }, [safeMaterials, course, sortBy, safeTasks]);
 
   // Filter tasks for this course
   const courseTasks = useMemo(() => {
     if (!course) return [];
-    return safeTasks.filter((t) => t.courseId === course.id);
+    return safeTasks.filter((t) => t && t.courseId === course.id);
   }, [safeTasks, course]);
 
   // Split into active upcoming vs completed graded quizzes/exams
   const activeUpcomingTasks = useMemo(() => {
     const list = courseTasks.filter((t) => t.status !== 'completed');
     if (sortBy === 'Alphabetical') {
-      return [...list].sort((a, b) => a.name.localeCompare(b.name));
+      return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     } else if (sortBy === 'Task Deadline') {
-      return [...list].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+      return [...list].sort((a, b) => new Date(a.deadline || 0).getTime() - new Date(b.deadline || 0).getTime());
     } else {
-      return [...list].sort((a, b) => new Date(b.deadline).getTime() - new Date(a.deadline).getTime());
+      return [...list].sort((a, b) => new Date(b.deadline || 0).getTime() - new Date(a.deadline || 0).getTime());
     }
   }, [courseTasks, sortBy]);
 
   const pastQuizExamResults = useMemo(() => {
     const list = courseTasks.filter((t) => t.status === 'completed' && (t.type === 'Quiz' || t.type === 'Exam' || t.achievedGrade !== undefined));
     if (sortBy === 'Alphabetical') {
-      return [...list].sort((a, b) => a.name.localeCompare(b.name));
+      return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     } else if (sortBy === 'Task Deadline') {
-      return [...list].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+      return [...list].sort((a, b) => new Date(a.deadline || 0).getTime() - new Date(b.deadline || 0).getTime());
     } else {
-      return [...list].sort((a, b) => new Date(b.completedAt || b.deadline).getTime() - new Date(a.completedAt || a.deadline).getTime());
+      return [...list].sort((a, b) => new Date(b.completedAt || b.deadline || 0).getTime() - new Date(a.completedAt || a.deadline || 0).getTime());
     }
   }, [courseTasks, sortBy]);
 
   // Aggregate formulas across all course materials
   const aggregatedFormulas = useMemo(() => {
+    if (!course) return [];
     const formulasList: {
       concept: string;
       formulaOrRule?: string;
@@ -131,18 +134,23 @@ export function CourseResourceHubModal({
     courseMaterials.forEach((mat) => {
       if (mat.keyFormulasAndConcepts && Array.isArray(mat.keyFormulasAndConcepts)) {
         mat.keyFormulasAndConcepts.forEach((f) => {
-          formulasList.push({
-            ...f,
-            materialTitle: mat.title,
-            uploadedAt: mat.uploadedAt,
-          });
+          if (f && f.concept) {
+            formulasList.push({
+              ...f,
+              materialTitle: mat.title || 'Course Material',
+              uploadedAt: mat.uploadedAt,
+            });
+          }
         });
       }
     });
 
+    const cId = (course.id || '').toLowerCase();
+    const cName = (course.name || '').toLowerCase();
+
     // Default fallbacks if no uploaded material formulas exist yet
     if (formulasList.length === 0) {
-      if (course.id.includes('calc') || course.name.toLowerCase().includes('calc')) {
+      if (cId.includes('calc') || cName.includes('calc')) {
         formulasList.push(
           {
             concept: 'Power Rule of Differentiation',
@@ -163,7 +171,7 @@ export function CourseResourceHubModal({
             materialTitle: 'Calculus Core Reference',
           }
         );
-      } else if (course.id.includes('phys') || course.name.toLowerCase().includes('phys')) {
+      } else if (cId.includes('phys') || cName.includes('phys')) {
         formulasList.push(
           {
             concept: 'Newton Second Law',
@@ -180,9 +188,9 @@ export function CourseResourceHubModal({
         );
       } else {
         formulasList.push({
-          concept: `${course.name} Key Concept 1`,
+          concept: `${course.name || 'Core'} Key Concept 1`,
           formulaOrRule: 'Key Theorem / Core Formula',
-          description: `Primary conceptual principle for ${course.name}.`,
+          description: `Primary conceptual principle for ${course.name || 'this course'}.`,
           materialTitle: 'General Course Syllabus',
         });
       }
@@ -193,14 +201,14 @@ export function CourseResourceHubModal({
       const q = searchQuery.toLowerCase();
       filtered = formulasList.filter(
         (item) =>
-          item.concept.toLowerCase().includes(q) ||
+          (item.concept || '').toLowerCase().includes(q) ||
           (item.formulaOrRule && item.formulaOrRule.toLowerCase().includes(q)) ||
-          item.description.toLowerCase().includes(q)
+          (item.description || '').toLowerCase().includes(q)
       );
     }
 
     if (sortBy === 'Alphabetical') {
-      return [...filtered].sort((a, b) => a.concept.localeCompare(b.concept));
+      return [...filtered].sort((a, b) => (a.concept || '').localeCompare(b.concept || ''));
     } else if (sortBy === 'Task Deadline') {
       return filtered;
     } else {

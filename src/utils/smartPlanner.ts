@@ -157,10 +157,16 @@ export function getTodayCapacityMetrics(
  * Format relative deadline string (e.g., "Tomorrow", "Due in 2 days", "Due in 4 days")
  */
 export function formatDeadlineRelative(
-  deadlineStr: string,
+  deadlineStr?: string | null,
   currentDate: Date = new Date()
 ): { text: string; urgency: 'critical' | 'high' | 'medium' | 'normal' } {
+  if (!deadlineStr) {
+    return { text: 'No deadline', urgency: 'normal' };
+  }
   const deadline = new Date(deadlineStr);
+  if (isNaN(deadline.getTime())) {
+    return { text: 'No deadline', urgency: 'normal' };
+  }
   const now = currentDate.getTime();
   const diffHours = (deadline.getTime() - now) / (1000 * 60 * 60);
 

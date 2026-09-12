@@ -21,8 +21,8 @@ interface CoursesProps {
 }
 
 export function Courses({
-  courses,
-  tasks,
+  courses = [],
+  tasks = [],
   materials = [],
   plantedTrees = [],
   onOpenAddCourse,
@@ -37,9 +37,21 @@ export function Courses({
   const [selectedCourseForStudyGroup, setSelectedCourseForStudyGroup] = useState<Course | null>(null);
   const [selectedCourseForResourceHub, setSelectedCourseForResourceHub] = useState<Course | null>(null);
 
+  const safeCourses = (courses || []).filter(Boolean);
+  const safeTasks = (tasks || []).filter(Boolean);
+
   // Dynamic Course stats helper
   const getCourseStats = (course: Course) => {
-    const courseTasks = tasks.filter((t) => t.courseId === course.id);
+    if (!course) {
+      return {
+        activeCount: 0,
+        completedCount: 0,
+        hoursRemaining: 0,
+        nextDeadline: 'None',
+        progress: 0,
+      };
+    }
+    const courseTasks = safeTasks.filter((t) => t && t.courseId === course.id);
     const activeTasks = courseTasks.filter((t) => t.status !== 'completed');
     const completedTasks = courseTasks.filter((t) => t.status === 'completed');
 
@@ -50,11 +62,13 @@ export function Courses({
     let nextDeadline = 'None';
     if (activeTasks.length > 0) {
       const sortedByDeadline = [...activeTasks].sort(
-        (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+        (a, b) => new Date(a.deadline || 0).getTime() - new Date(b.deadline || 0).getTime()
       );
       const closest = sortedByDeadline[0];
-      const rel = formatDeadlineRelative(closest.deadline);
-      nextDeadline = rel.text;
+      if (closest && closest.deadline) {
+        const rel = formatDeadlineRelative(closest.deadline);
+        nextDeadline = rel?.text || 'None';
+      }
     }
 
     const total = courseTasks.length || 1;
@@ -91,14 +105,14 @@ export function Courses({
         <button
           id="add-course-header-btn"
           onClick={onOpenAddCourse}
-          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition-all active:scale-95"
+          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition-all active:scale-95 cursor-pointer"
         >
           <Plus className="w-4 h-4 stroke-[2.5]" />
           <span>Add Course</span>
         </button>
       </div>
 
-      {courses.length === 0 ? (
+      {safeCourses.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4">
             <BookOpen className="w-6 h-6" />
@@ -111,7 +125,7 @@ export function Courses({
           </p>
           <button
             onClick={onOpenAddCourse}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition-all"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Add Your First Course</span>
@@ -120,9 +134,9 @@ export function Courses({
       ) : (
         /* Course Cards Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {courses.map((course) => {
+          {safeCourses.map((course) => {
             const stats = getCourseStats(course);
-            const gradeSummary = calculateCourseGrade(course.id, tasks);
+            const gradeSummary = calculateCourseGrade(course.id, safeTasks);
             const badgeConfig = getStatusBadgeConfig(gradeSummary.statusBadge);
 
             return (
@@ -139,16 +153,16 @@ export function Courses({
                       <div className="flex items-center gap-3">
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-xs"
-                          style={{ backgroundColor: course.accentHex }}
+                          style={{ backgroundColor: course.accentHex || '#6366f1' }}
                         >
                           <BookOpen className="w-5 h-5" />
                         </div>
                         <div>
                           <h3 className="font-display font-bold text-lg text-slate-900 leading-snug">
-                            {course.name}
+                            {course.name || 'Untitled Course'}
                           </h3>
                           <p className="text-xs text-slate-400 font-mono font-medium">
-                            {course.code} {course.credits ? `• ${course.credits} Credits` : ''}
+                            {course.code || ''} {course.credits ? `• ${course.credits} Credits` : ''}
                           </p>
                         </div>
                       </div>
@@ -323,36 +337,42 @@ export function Courses({
       )}
 
       {/* Course Detail Modal */}
-      <CourseDetailModal
-        isOpen={Boolean(selectedCourseForDetail)}
-        onClose={() => setSelectedCourseForDetail(null)}
-        course={selectedCourseForDetail}
-        tasks={tasks}
-        materials={materials}
-        plantedTrees={plantedTrees}
-        onStartTask={onStartTask || (() => {})}
-        onToggleTaskComplete={onToggleTaskComplete || (() => {})}
-        onOpenAddTaskForCourse={onOpenAddTaskForCourse || (() => {})}
-      />
+      {selectedCourseForDetail && (
+        <CourseDetailModal
+          isOpen={Boolean(selectedCourseForDetail)}
+          onClose={() => setSelectedCourseForDetail(null)}
+          course={selectedCourseForDetail}
+          tasks={safeTasks}
+          materials={materials}
+          plantedTrees={plantedTrees}
+          onStartTask={onStartTask || (() => {})}
+          onToggleTaskComplete={onToggleTaskComplete || (() => {})}
+          onOpenAddTaskForCourse={onOpenAddTaskForCourse || (() => {})}
+        />
+      )}
 
       {/* Study Group Modal */}
-      <StudyGroupModal
-        isOpen={Boolean(selectedCourseForStudyGroup)}
-        onClose={() => setSelectedCourseForStudyGroup(null)}
-        course={selectedCourseForStudyGroup}
-        tasks={tasks}
-      />
+      {selectedCourseForStudyGroup && (
+        <StudyGroupModal
+          isOpen={Boolean(selectedCourseForStudyGroup)}
+          onClose={() => setSelectedCourseForStudyGroup(null)}
+          course={selectedCourseForStudyGroup}
+          tasks={safeTasks}
+        />
+      )}
 
       {/* Course Resource Hub Modal */}
-      <CourseResourceHubModal
-        isOpen={Boolean(selectedCourseForResourceHub)}
-        onClose={() => setSelectedCourseForResourceHub(null)}
-        courseId={selectedCourseForResourceHub?.id}
-        course={selectedCourseForResourceHub}
-        courses={courses}
-        tasks={tasks}
-        materials={materials}
-      />
+      {selectedCourseForResourceHub && (
+        <CourseResourceHubModal
+          isOpen={Boolean(selectedCourseForResourceHub)}
+          onClose={() => setSelectedCourseForResourceHub(null)}
+          courseId={selectedCourseForResourceHub?.id}
+          course={selectedCourseForResourceHub}
+          courses={safeCourses}
+          tasks={safeTasks}
+          materials={materials}
+        />
+      )}
 
       {/* Delete Course Confirmation Modal */}
       {courseToDelete && (

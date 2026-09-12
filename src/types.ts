@@ -112,6 +112,7 @@ export interface StudyAvailability {
 
 export interface CollegeLecture {
   id: string;
+  courseId?: string;
   courseName: string;
   courseCode?: string;
   day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';

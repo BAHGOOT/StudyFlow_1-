@@ -43,6 +43,7 @@ import { AddTaskModal } from './components/AddTaskModal';
 import { AddCourseModal } from './components/AddCourseModal';
 import { FocusSessionModal } from './components/FocusSessionModal';
 import { FloatingFocusWidget } from './components/FloatingFocusWidget';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { CollegeScheduleModal } from './components/CollegeScheduleModal';
 import { AssessmentCheckModal } from './components/AssessmentCheckModal';
 import { PlanPreviewModal } from './components/PlanPreviewModal';
@@ -998,71 +999,79 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
 
         {/* Screen 2: My Tasks */}
         {currentScreen === 'tasks' && (
-          <MyTasks
-            tasks={tasks}
-            courses={courses}
-            onStartTask={handleStartTask}
-            onToggleComplete={handleToggleTaskComplete}
-            onDeleteTask={handleDeleteTask}
-            onBulkCompleteTasks={handleBulkCompleteTasks}
-            onBulkDeleteTasks={handleBulkDeleteTasks}
-            onOpenAddTask={() => setIsAddTaskOpen(true)}
-            activeTaskId={focusSession.activeTask?.id}
-            onExpandSession={focusSession.expandSession}
-            onOpenScorePrompt={(task) => setTaskForScorePrompt(task)}
-          />
+          <ErrorBoundary fallbackTitle="Tasks view encountered an issue">
+            <MyTasks
+              tasks={tasks}
+              courses={courses}
+              onStartTask={handleStartTask}
+              onToggleComplete={handleToggleTaskComplete}
+              onDeleteTask={handleDeleteTask}
+              onBulkCompleteTasks={handleBulkCompleteTasks}
+              onBulkDeleteTasks={handleBulkDeleteTasks}
+              onOpenAddTask={() => setIsAddTaskOpen(true)}
+              activeTaskId={focusSession.activeTask?.id}
+              onExpandSession={focusSession.expandSession}
+              onOpenScorePrompt={(task) => setTaskForScorePrompt(task)}
+            />
+          </ErrorBoundary>
         )}
 
         {/* Screen 3: Courses */}
         {currentScreen === 'courses' && (
-          <Courses
-            courses={courses}
-            tasks={tasks}
-            materials={materials}
-            plantedTrees={plantedTrees}
-            onOpenAddCourse={() => setIsAddCourseOpen(true)}
-            onSelectCourseTasks={() => setCurrentScreen('tasks')}
-            onDeleteCourse={handleDeleteCourse}
-            onStartTask={handleStartTask}
-            onToggleTaskComplete={handleToggleTaskComplete}
-            onOpenAddTaskForCourse={() => setIsAddTaskOpen(true)}
-          />
+          <ErrorBoundary fallbackTitle="Courses view encountered an issue">
+            <Courses
+              courses={courses}
+              tasks={tasks}
+              materials={materials}
+              plantedTrees={plantedTrees}
+              onOpenAddCourse={() => setIsAddCourseOpen(true)}
+              onSelectCourseTasks={() => setCurrentScreen('tasks')}
+              onDeleteCourse={handleDeleteCourse}
+              onStartTask={handleStartTask}
+              onToggleTaskComplete={handleToggleTaskComplete}
+              onOpenAddTaskForCourse={() => setIsAddTaskOpen(true)}
+            />
+          </ErrorBoundary>
         )}
 
         {/* Screen 3.5: Materials & Knowledge Base */}
         {currentScreen === 'materials' && (
-          (profile.role === 'admin' || currentUser.email?.toLowerCase() === 'mohamedelkoramy97@gmail.com') ? (
-            <Materials
-              courses={courses}
-              materials={materials}
-              tasks={tasks}
-              onAddMaterial={handleAddMaterial}
-              onDeleteMaterial={handleDeleteMaterial}
-              onStartFocusSession={handleStartTask}
-            />
-          ) : (
-            <MaterialsComingSoon
-              onNavigateBack={() => setCurrentScreen('dashboard')}
-              userEmail={currentUser.email || undefined}
-            />
-          )
+          <ErrorBoundary fallbackTitle="Materials view encountered an issue">
+            {(profile.role === 'admin' || currentUser.email?.toLowerCase() === 'mohamedelkoramy97@gmail.com') ? (
+              <Materials
+                courses={courses}
+                materials={materials}
+                tasks={tasks}
+                onAddMaterial={handleAddMaterial}
+                onDeleteMaterial={handleDeleteMaterial}
+                onStartFocusSession={handleStartTask}
+              />
+            ) : (
+              <MaterialsComingSoon
+                onNavigateBack={() => setCurrentScreen('dashboard')}
+                userEmail={currentUser.email || undefined}
+              />
+            )}
+          </ErrorBoundary>
         )}
 
         {/* Screen 4: Planner */}
         {currentScreen === 'planner' && (
-          <Planner
-            weeklyPlan={weeklyPlan}
-            tasks={tasks}
-            courses={courses}
-            availability={availability}
-            lectures={lectures}
-            onToggleSessionComplete={handleToggleSessionComplete}
-            onRegeneratePlan={handleRegeneratePlan}
-            onOpenCollegeSchedule={() => setIsCollegeScheduleOpen(true)}
-            onCheckAssessment={(task) => setActiveAssessmentTask(task)}
-            onStartTask={handleStartTask}
-            onUpdateSessionTimeSlot={handleUpdateSessionTimeSlot}
-          />
+          <ErrorBoundary fallbackTitle="Planner view encountered an issue">
+            <Planner
+              weeklyPlan={weeklyPlan}
+              tasks={tasks}
+              courses={courses}
+              availability={availability}
+              lectures={lectures}
+              onToggleSessionComplete={handleToggleSessionComplete}
+              onRegeneratePlan={handleRegeneratePlan}
+              onOpenCollegeSchedule={() => setIsCollegeScheduleOpen(true)}
+              onCheckAssessment={(task) => setActiveAssessmentTask(task)}
+              onStartTask={handleStartTask}
+              onUpdateSessionTimeSlot={handleUpdateSessionTimeSlot}
+            />
+          </ErrorBoundary>
         )}
 
         {/* Screen 5: Forest (Grove of Focus) */}

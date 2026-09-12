@@ -59,7 +59,8 @@ export function CourseDetailModal({
   if (!isOpen || !course) return null;
 
   // Filter tasks belonging to this course
-  const courseTasks = tasks.filter((t) => t.courseId === course.id);
+  const safeTasks = tasks || [];
+  const courseTasks = safeTasks.filter((t) => t && t.courseId === course.id);
   const activeTasks = courseTasks.filter((t) => t.status !== 'completed');
   const completedTasks = courseTasks.filter((t) => t.status === 'completed');
   const milestoneTasks = courseTasks.filter((t) => t.type === 'Exam' || t.type === 'Quiz' || t.type === 'Project');
@@ -69,8 +70,10 @@ export function CourseDetailModal({
   const activeHours = Math.round((activeMinutes / 60) * 10) / 10;
 
   // Calculate logged focus minutes from planted trees for this course
-  const courseTrees = plantedTrees.filter(
-    (tree) => tree.courseId === course.id || tree.courseName.toLowerCase() === course.name.toLowerCase()
+  const courseNameLower = (course.name || '').toLowerCase();
+  const safeTrees = plantedTrees || [];
+  const courseTrees = safeTrees.filter(
+    (tree) => tree && (tree.courseId === course.id || (tree.courseName && tree.courseName.toLowerCase() === courseNameLower))
   );
   const loggedMinutesFromTrees = courseTrees.reduce((acc, tree) => acc + (tree.focusMinutes || 0), 0);
   const completedTasksMinutes = completedTasks.reduce((acc, t) => acc + (t.estimatedMinutes || 0), 0);
@@ -85,7 +88,7 @@ export function CourseDetailModal({
   const badgeConfig = getStatusBadgeConfig(gradeSummary.statusBadge);
 
   // Highest priority active task
-  const sortedActiveTasks = [...activeTasks].sort((a, b) => b.smartPriorityScore - a.smartPriorityScore);
+  const sortedActiveTasks = [...activeTasks].sort((a, b) => (b.smartPriorityScore || 0) - (a.smartPriorityScore || 0));
   const topTask = sortedActiveTasks[0];
 
   return (
@@ -100,7 +103,7 @@ export function CourseDetailModal({
         {/* Header with Course Accent */}
         <div
           className="p-6 text-white relative flex flex-col justify-between"
-          style={{ backgroundColor: course.accentHex }}
+          style={{ backgroundColor: course.accentHex || '#6366f1' }}
         >
           <button
             type="button"
