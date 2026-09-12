@@ -168,11 +168,6 @@ export function Navigation({
                       🌲 {item.badge}
                     </span>
                   )}
-                  {item.id === 'materials' && !isAdmin && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/40">
-                      Soon
-                    </span>
-                  )}
                   {item.id === 'store' && (
                     <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-transparent dark:border-amber-800">
                       🪙

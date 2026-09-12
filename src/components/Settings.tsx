@@ -403,10 +403,9 @@ export function Settings({
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. ADMINISTRATOR CONTROL PANEL (When user is admin)                       */}
+      {/* 4. ADMINISTRATOR CONTROL PANEL                                             */}
       {/* ========================================================================= */}
-      {(profile.role === 'admin' || userEmail?.toLowerCase() === 'mohamedelkoramy97@gmail.com') && (
-        <section className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl border border-indigo-500/30 p-6 shadow-md space-y-5">
+      <section className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl border border-indigo-500/30 p-6 shadow-md space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shadow-inner">
@@ -493,7 +492,6 @@ export function Settings({
             )}
           </div>
         </section>
-      )}
 
       {/* Workspace Data Controls / Sign out */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">

@@ -31,7 +31,6 @@ import { Dashboard } from './components/Dashboard';
 import { MyTasks } from './components/MyTasks';
 import { Courses } from './components/Courses';
 import { Materials } from './components/Materials';
-import { MaterialsComingSoon } from './components/MaterialsComingSoon';
 import { SessionBlueprintDrawer } from './components/SessionBlueprintDrawer';
 import { UnfinishedTaskRolloverBanner } from './components/UnfinishedTaskRolloverBanner';
 import { Planner } from './components/Planner';
@@ -1052,21 +1051,14 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
         {/* Screen 3.5: Materials & Knowledge Base */}
         {currentScreen === 'materials' && (
           <ErrorBoundary fallbackTitle="Materials view encountered an issue">
-            {(profile.role === 'admin' || currentUser.email?.toLowerCase() === 'mohamedelkoramy97@gmail.com') ? (
-              <Materials
-                courses={courses}
-                materials={materials}
-                tasks={tasks}
-                onAddMaterial={handleAddMaterial}
-                onDeleteMaterial={handleDeleteMaterial}
-                onStartFocusSession={handleStartTask}
-              />
-            ) : (
-              <MaterialsComingSoon
-                onNavigateBack={() => setCurrentScreen('dashboard')}
-                userEmail={currentUser.email || undefined}
-              />
-            )}
+            <Materials
+              courses={courses}
+              materials={materials}
+              tasks={tasks}
+              onAddMaterial={handleAddMaterial}
+              onDeleteMaterial={handleDeleteMaterial}
+              onStartFocusSession={handleStartTask}
+            />
           </ErrorBoundary>
         )}
 
