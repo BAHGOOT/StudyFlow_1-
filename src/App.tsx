@@ -54,6 +54,7 @@ import { generateRemedialTasksForExam } from './utils/gradeCalculator';
 import { AuthScreen } from './components/AuthScreen';
 import { AuthProvider, useAuth, AuthUser } from './contexts/AuthContext';
 import { useFocusSession } from './hooks/useFocusSession';
+import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import {
   subscribeToUserData,
   saveTaskToDb,
@@ -244,6 +245,19 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
     unlockedSpecies,
     handleAbandonTask
   );
+
+  const isAnyModalOpen =
+    isAddTaskOpen ||
+    isAddCourseOpen ||
+    isCollegeScheduleOpen ||
+    !!activeAssessmentTask ||
+    !!blueprintTask ||
+    isPlanPreviewOpen ||
+    !!taskForScorePrompt ||
+    isFeedbackOpen ||
+    Boolean(focusSession.activeTask && !focusSession.isMinimized);
+
+  useBodyScrollLock(isAnyModalOpen);
 
   // Unlock Species from Store
   const handleUnlockSpecies = (speciesId: TreeSpecies, price: number): boolean => {

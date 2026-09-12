@@ -59,11 +59,11 @@ export function AddCourseModal({ isOpen, onClose, onAddCourse }: AddCourseModalP
   return (
     <div
       id="add-course-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overscroll-contain"
     >
       <div
         id="add-course-modal-container"
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 overscroll-contain"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <div>

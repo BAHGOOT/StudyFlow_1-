@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { TreeSpecies } from '../types';
 import { FocusSessionController } from '../hooks/useFocusSession';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   Minus,
   X,
@@ -65,6 +66,8 @@ export function FocusSessionModal({
     startNextFocusBlock,
   } = focusSession;
 
+  useBodyScrollLock(isOpen && !!task);
+
   if (!isOpen || !task) return null;
 
   const isTimerFinished = secondsRemaining === 0;
@@ -83,11 +86,11 @@ export function FocusSessionModal({
   return (
     <div
       id="focus-session-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto overscroll-contain"
     >
       <div
         id="focus-session-card"
-        className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col my-4 relative max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col my-4 relative max-h-[90vh] overflow-y-auto overscroll-contain"
       >
         {/* Abandon confirmation overlay */}
         {showAbandonConfirm && (

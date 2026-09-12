@@ -6,6 +6,10 @@
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   }
+  body.modal-open {
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+  }
   h1, h2, h3, h4, .font-display {
     font-family: 'Lexend', 'Plus Jakarta Sans', system-ui, sans-serif;
   }

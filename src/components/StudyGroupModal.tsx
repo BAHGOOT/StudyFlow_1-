@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Course, Task } from '../types';
 import { safeCopyToClipboard } from '../utils/clipboard';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   X,
   Users,
@@ -106,6 +107,8 @@ export function StudyGroupModal({
     },
   ]);
 
+  useBodyScrollLock(isOpen && !!course);
+
   if (!isOpen || !course) return null;
 
   const courseTasks = tasks.filter((t) => t.courseId === course.id);
@@ -159,11 +162,11 @@ export function StudyGroupModal({
   return (
     <div
       id="study-group-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto overscroll-contain"
     >
       <div
         id="study-group-modal-card"
-        className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col my-4"
+        className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col my-4 overscroll-contain"
       >
         {/* Header with Course Branding */}
         <div

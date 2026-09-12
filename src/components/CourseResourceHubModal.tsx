@@ -4,6 +4,7 @@ import { safeCopyToClipboard } from '../utils/clipboard';
 import { useAuth } from '../contexts/AuthContext';
 import { saveMaterialToDb } from '../services/firestoreService';
 import { useUploadThing } from '../utils/uploadthing';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   X,
   Printer,
@@ -501,6 +502,8 @@ export function CourseResourceHubModal({
     return getStatusBadgeConfig(gradeSummary.statusBadge);
   }, [gradeSummary]);
 
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   if (!course) {
@@ -649,11 +652,11 @@ ${pastQuizExamResults.map((t) => `- ${t.name}: ${t.achievedGrade}/${t.maxGrade} 
 
       <div
         id="course-resource-hub-overlay"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-in fade-in duration-200 overflow-y-auto overscroll-contain"
       >
         <div
           id="course-resource-hub-card"
-          className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col my-4 max-h-[92vh]"
+          className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col my-4 max-h-[92vh] overscroll-contain"
         >
           {/* Top Header with Course Accent */}
           <div

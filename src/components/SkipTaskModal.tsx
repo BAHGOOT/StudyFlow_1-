@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Task, Course } from '../types';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   X,
   AlertTriangle,
@@ -33,6 +34,8 @@ export function SkipTaskModal({
     'tomorrow' | 'friday' | 'weekend' | 'next_week'
   >('tomorrow');
 
+  useBodyScrollLock(isOpen && !!task);
+
   if (!isOpen || !task) return null;
 
   const handleConfirm = () => {
@@ -43,11 +46,11 @@ export function SkipTaskModal({
   return (
     <div
       id="skip-task-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in duration-200 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in duration-200 overflow-y-auto overscroll-contain"
     >
       <div
         id="skip-task-modal-card"
-        className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden relative"
+        className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden relative overscroll-contain"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-amber-50/60">

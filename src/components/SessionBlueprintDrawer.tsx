@@ -12,6 +12,7 @@ import {
   Award,
 } from 'lucide-react';
 import { Task, Course, CourseMaterial } from '../types';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface SessionBlueprintDrawerProps {
   task: Task | null;
@@ -30,6 +31,8 @@ export function SessionBlueprintDrawer({
   onStartFocusSession,
   onToggleTaskComplete,
 }: SessionBlueprintDrawerProps) {
+  useBodyScrollLock(!!task);
+
   if (!task) return null;
 
   const course = courses.find((c) => c.id === task.courseId);
@@ -123,8 +126,8 @@ export function SessionBlueprintDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex justify-end">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-xl h-full border-l border-slate-200 dark:border-slate-800 flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex justify-end overscroll-contain">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-xl h-full border-l border-slate-200 dark:border-slate-800 flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200 overscroll-contain">
         {/* Drawer Header */}
         <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex items-start justify-between">
           <div>
