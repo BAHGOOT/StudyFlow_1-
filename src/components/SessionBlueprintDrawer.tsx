@@ -10,6 +10,7 @@ import {
   Send,
   RefreshCw,
   Award,
+  Maximize2,
 } from 'lucide-react';
 import { Task, Course, CourseMaterial } from '../types';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
@@ -21,6 +22,8 @@ interface SessionBlueprintDrawerProps {
   onClose: () => void;
   onStartFocusSession: (task: Task) => void;
   onToggleTaskComplete?: (taskId: string) => void;
+  activeTaskId?: string;
+  onExpandSession?: () => void;
 }
 
 export function SessionBlueprintDrawer({
@@ -30,6 +33,8 @@ export function SessionBlueprintDrawer({
   onClose,
   onStartFocusSession,
   onToggleTaskComplete,
+  activeTaskId,
+  onExpandSession,
 }: SessionBlueprintDrawerProps) {
   useBodyScrollLock(!!task);
 
@@ -378,16 +383,38 @@ export function SessionBlueprintDrawer({
 
         {/* Footer Launch Focus Button */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-          <button
-            onClick={() => {
-              onClose();
-              onStartFocusSession(task);
-            }}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-transform active:scale-98"
-          >
-            <Play className="w-4 h-4 fill-white" />
-            <span>Launch Document Focus Session ({task.estimatedMinutes} Mins)</span>
-          </button>
+          {activeTaskId === task.id ? (
+            <button
+              onClick={() => {
+                onClose();
+                onExpandSession?.();
+              }}
+              className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-transform active:scale-98 ring-2 ring-amber-300 animate-pulse"
+            >
+              <Maximize2 className="w-4 h-4" />
+              <span>Focusing (Click to View Timer)</span>
+            </button>
+          ) : activeTaskId ? (
+            <button
+              disabled
+              title="Another focus session is active"
+              className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 font-bold text-sm rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+            >
+              <Play className="w-4 h-4 fill-current opacity-40" />
+              <span>Another Focus Session In Progress</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                onClose();
+                onStartFocusSession(task);
+              }}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-transform active:scale-98"
+            >
+              <Play className="w-4 h-4 fill-white" />
+              <span>Launch Document Focus Session ({task.estimatedMinutes} Mins)</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

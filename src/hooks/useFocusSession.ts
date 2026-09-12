@@ -58,6 +58,13 @@ export function useFocusSession(
   ]);
 
   const startSession = (task: Task, course?: Course) => {
+    // If this exact task is already the active focus session, just unminimize/expand without resetting timer progress
+    if (activeTask && activeTask.id === task.id) {
+      setIsMinimized(false);
+      setIsActive(true);
+      return;
+    }
+
     setActiveTask(task);
     setActiveCourse(course || null);
     setIsMinimized(false);

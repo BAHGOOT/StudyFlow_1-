@@ -21,6 +21,7 @@ import {
   Check,
   Users,
   GraduationCap,
+  Maximize2,
 } from 'lucide-react';
 import { formatDeadlineRelative, formatDuration } from '../utils/smartPlanner';
 import { simplifyTaskTitle, getSmartPriorityLevel } from './MyTasks';
@@ -38,6 +39,8 @@ interface CourseDetailModalProps {
   onStartTask: (task: Task) => void;
   onToggleTaskComplete: (taskId: string) => void;
   onOpenAddTaskForCourse: (courseId: string) => void;
+  activeTaskId?: string;
+  onExpandSession?: () => void;
 }
 
 export function CourseDetailModal({
@@ -50,6 +53,8 @@ export function CourseDetailModal({
   onStartTask,
   onToggleTaskComplete,
   onOpenAddTaskForCourse,
+  activeTaskId,
+  onExpandSession,
 }: CourseDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'active' | 'milestones' | 'completed' | 'formulas'>('active');
   const [formulaSearch, setFormulaSearch] = useState('');
@@ -224,17 +229,42 @@ export function CourseDetailModal({
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onStartTask(topTask);
-                }}
-                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Start Focus Session</span>
-              </button>
+              {activeTaskId === topTask.id ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onExpandSession?.();
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 ring-2 ring-amber-300 animate-pulse"
+                  title="This session is currently active. Click to view timer."
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Focusing (Click to View)</span>
+                </button>
+              ) : activeTaskId ? (
+                <button
+                  type="button"
+                  disabled
+                  title="Another focus session is currently active"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 text-xs font-bold border border-slate-200 dark:border-slate-700 cursor-not-allowed shrink-0 opacity-60 flex items-center justify-center gap-2"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current opacity-40" />
+                  <span>Session In Progress</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onStartTask(topTask);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Start Focus Session</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -418,17 +448,42 @@ export function CourseDetailModal({
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          onStartTask(task);
-                        }}
-                        className="self-end sm:self-center px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Start</span>
-                      </button>
+                      {activeTaskId === task.id ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onExpandSession?.();
+                          }}
+                          className="self-end sm:self-center px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ring-2 ring-amber-300 animate-pulse"
+                          title="Task actively running. Click to view timer."
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>Focusing</span>
+                        </button>
+                      ) : activeTaskId ? (
+                        <button
+                          type="button"
+                          disabled
+                          title="Another focus session is active"
+                          className="self-end sm:self-center px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 text-xs font-bold border border-slate-200 dark:border-slate-700 cursor-not-allowed shrink-0 opacity-60 flex items-center gap-1.5"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current opacity-40" />
+                          <span>Running</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onStartTask(task);
+                          }}
+                          className="self-end sm:self-center px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Start</span>
+                        </button>
+                      )}
                     </div>
                   );
                 })
@@ -475,17 +530,42 @@ export function CourseDetailModal({
                       </div>
 
                       {!isDone && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onClose();
-                            onStartTask(task);
-                          }}
-                          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-amber-950 text-xs font-bold shadow-2xs flex items-center gap-1 transition-all cursor-pointer shrink-0"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Prepare</span>
-                        </button>
+                        activeTaskId === task.id ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onExpandSession?.();
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-2xs flex items-center gap-1 transition-all cursor-pointer shrink-0 ring-2 ring-amber-300 animate-pulse"
+                            title="Task actively running. Click to view timer."
+                          >
+                            <Maximize2 className="w-3.5 h-3.5" />
+                            <span>Focusing</span>
+                          </button>
+                        ) : activeTaskId ? (
+                          <button
+                            type="button"
+                            disabled
+                            title="Another focus session is active"
+                            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 text-xs font-bold border border-slate-200 dark:border-slate-700 cursor-not-allowed shrink-0 opacity-60 flex items-center gap-1"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current opacity-40" />
+                            <span>Running</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onStartTask(task);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-amber-950 text-xs font-bold shadow-2xs flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <span>Prepare</span>
+                          </button>
+                        )
                       )}
                     </div>
                   );

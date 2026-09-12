@@ -25,6 +25,7 @@ import {
   Download,
   Brain,
   RefreshCw,
+  Maximize2,
 } from 'lucide-react';
 import { formatDuration } from '../utils/smartPlanner';
 import { downloadCalendarIcsFile } from '../utils/calendarExporter';
@@ -41,6 +42,8 @@ interface PlannerProps {
   onCheckAssessment?: (task: Task) => void;
   onStartTask?: (task: Task) => void;
   onUpdateSessionTimeSlot?: (sessionId: string, newTimeSlot: string) => void;
+  activeTaskId?: string;
+  onExpandSession?: () => void;
 }
 
 const DAYS_OF_WEEK: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[] = [
@@ -78,6 +81,8 @@ export function Planner({
   onCheckAssessment,
   onStartTask,
   onUpdateSessionTimeSlot,
+  activeTaskId,
+  onExpandSession,
 }: PlannerProps) {
   const currentDayOfWeekName = (['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()] || 'Monday') as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
 
@@ -793,15 +798,40 @@ export function Planner({
                                     <span>{isCompleted ? 'Completed ✓' : 'Mark Task Complete'}</span>
                                   </button>
 
-                                  {!isCompleted && onStartTask && task && (
-                                    <button
-                                      type="button"
-                                      onClick={() => onStartTask(task)}
-                                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold transition-all cursor-pointer shadow-xs"
-                                    >
-                                      <Play className="w-3.5 h-3.5 fill-current" />
-                                      <span>Start Focus Session</span>
-                                    </button>
+                                  {!isCompleted && (
+                                    activeTaskId === task?.id ? (
+                                      <button
+                                        type="button"
+                                        id={`planner-active-btn-${task.id}`}
+                                        onClick={onExpandSession}
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold shadow-xs transition-all active:scale-95 cursor-pointer ring-2 ring-amber-300 animate-pulse"
+                                        title="This task is actively running. Click to view session."
+                                      >
+                                        <Maximize2 className="w-3.5 h-3.5" />
+                                        <span>Focusing (Click to View)</span>
+                                      </button>
+                                    ) : activeTaskId ? (
+                                      <button
+                                        type="button"
+                                        id={`planner-disabled-btn-${task?.id}`}
+                                        disabled
+                                        title="Another focus session is currently running. Please finish or complete it first."
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 text-xs font-bold border border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-60"
+                                      >
+                                        <Play className="w-3.5 h-3.5 fill-current opacity-40" />
+                                        <span>Session In Progress</span>
+                                      </button>
+                                    ) : onStartTask && task ? (
+                                      <button
+                                        type="button"
+                                        id={`planner-start-btn-${task.id}`}
+                                        onClick={() => onStartTask(task)}
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold transition-all cursor-pointer shadow-xs"
+                                      >
+                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                        <span>Start Focus Session</span>
+                                      </button>
+                                    ) : null
                                   )}
                                 </div>
 

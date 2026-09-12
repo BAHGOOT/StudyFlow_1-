@@ -20,6 +20,8 @@ interface CoursesProps {
   onOpenAddTaskForCourse?: (courseId: string) => void;
   onAddMaterial?: (material: CourseMaterial) => void;
   onLoadSampleData?: () => void;
+  activeTaskId?: string;
+  onExpandSession?: () => void;
 }
 
 export function Courses({
@@ -35,6 +37,8 @@ export function Courses({
   onOpenAddTaskForCourse,
   onAddMaterial,
   onLoadSampleData,
+  activeTaskId,
+  onExpandSession,
 }: CoursesProps) {
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [selectedCourseForDetail, setSelectedCourseForDetail] = useState<Course | null>(null);
@@ -364,6 +368,8 @@ export function Courses({
           onStartTask={onStartTask || (() => {})}
           onToggleTaskComplete={onToggleTaskComplete || (() => {})}
           onOpenAddTaskForCourse={onOpenAddTaskForCourse || (() => {})}
+          activeTaskId={activeTaskId}
+          onExpandSession={onExpandSession}
         />
       )}
 

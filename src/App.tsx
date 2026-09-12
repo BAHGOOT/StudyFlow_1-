@@ -283,6 +283,19 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
     if (task.type === 'Exam' || task.type === 'Quiz') {
       setActiveAssessmentTask(task);
     } else {
+      // Safety guard 1: If THIS exact task is already the active focus task, simply expand the session!
+      if (focusSession.activeTask?.id === task.id) {
+        focusSession.expandSession();
+        return;
+      }
+
+      // Safety guard 2: If another task is already in progress in focusSession, alert user and show the running session
+      if (focusSession.activeTask) {
+        showToast(`⚠️ Another focus session ("${focusSession.activeTask.name}") is currently active. Please pause or finish it first.`);
+        focusSession.expandSession();
+        return;
+      }
+
       const updatedTask: Task = { ...task, status: 'in_progress' };
       setTasks((prev) => prev.map((t) => (t.id === task.id ? updatedTask : t)));
       saveTaskToDb(currentUser.uid, updatedTask);
@@ -1059,6 +1072,8 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
               onOpenAddTaskForCourse={() => setIsAddTaskOpen(true)}
               onAddMaterial={handleAddMaterial}
               onLoadSampleData={handleLoadSampleData}
+              activeTaskId={focusSession.activeTask?.id}
+              onExpandSession={focusSession.expandSession}
             />
           </ErrorBoundary>
         )}
@@ -1092,6 +1107,8 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
               onCheckAssessment={(task) => setActiveAssessmentTask(task)}
               onStartTask={handleStartTask}
               onUpdateSessionTimeSlot={handleUpdateSessionTimeSlot}
+              activeTaskId={focusSession.activeTask?.id}
+              onExpandSession={focusSession.expandSession}
             />
           </ErrorBoundary>
         )}
@@ -1186,6 +1203,8 @@ const StudyFlowMainApp: React.FC<StudyFlowMainAppProps> = ({ currentUser }) => {
           onClose={() => setBlueprintTask(null)}
           onStartFocusSession={handleStartTask}
           onToggleTaskComplete={handleToggleTaskComplete}
+          activeTaskId={focusSession.activeTask?.id}
+          onExpandSession={focusSession.expandSession}
         />
       )}
 
