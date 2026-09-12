@@ -1,11 +1,9 @@
 {
   "projectId": "studyflow-50ffd",
   "appId": "1:181840277686:web:08c76966dcc944173ff617",
-  "apiKey": "AIzaSyDhvJ4P5sQj4Hpoafkth0bLlekOJus1lgc",
+  "apiKey": "AIzaSyDhvJ4P5sQj4Hpoafkth0bllekOjus1lgc",
   "authDomain": "studyflow-50ffd.firebaseapp.com",
-  "storageBucket": "studyflow-50ffd.firebasestorage.app",
+  "storageBucket": "studyflow-50ffd.appspot.com",
   "messagingSenderId": "181840277686",
-  "measurementId": "G-50B8C5ZMH4",
-  "oAuthClientId": "",
-  "recaptchaSiteKey": ""
+  "measurementId": "G-50B8C5ZMH4"
 }
